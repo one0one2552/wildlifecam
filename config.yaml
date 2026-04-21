@@ -1,0 +1,46 @@
+camera:
+  af_mode: 2
+  af_range: 0
+  analogue_gain: 1.0
+  awb_mode: 7
+  contrast: 1.0
+  exposure_time: 0
+  hdr: false
+  lens_position: 1.0
+  saturation: 1.0
+live:
+  framerate: 15
+  jpeg_quality: 85
+  resolution:
+  - 1280
+  - 720
+  watchdog_seconds: 180
+pir:
+  gpio_pin: 17
+  pull_down: true
+relay:
+  active_high: true
+  gpio_pin: 18
+server:
+  host: 0.0.0.0
+  password_hash: $2b$12$NW0VBcuNOQFp.Bl7F55ELuN2iWBoVdsbdS05X5aoOveCuzbXmVcuC
+  port: 8080
+  username: admin
+storage:
+  halt_free_mb: 100
+  min_free_mb: 500
+  nas:
+    enabled: false
+    password: ''
+    remote_path: /
+    server: 192.168.1.100
+    share: wildlife
+    username: pi
+  recordings_path: /recordings
+trap:
+  framerate: 30
+  post_event_seconds: 10
+  pre_event_seconds: 3
+  resolution:
+  - 1920
+  - 1080

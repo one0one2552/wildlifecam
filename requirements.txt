@@ -1,0 +1,16 @@
+# Core camera / GPIO (system packages, listed for reference)
+# picamera2, python3-libcamera, python3-lgpio installed via apt
+
+# Web server
+flask>=3.0.0
+flask-httpauth>=4.8.0
+bcrypt>=4.1.0
+
+# NAS upload
+smbprotocol>=1.13.0
+
+# Config
+pyyaml>=6.0.1
+
+# Utilities
+psutil>=5.9.0
