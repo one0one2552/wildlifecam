@@ -15,6 +15,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from functools import wraps
 from typing import TYPE_CHECKING
@@ -83,6 +84,14 @@ def create_app(
     def index():
         cam_cfg = _cfg.get("camera", {})
         trap_cfg = _cfg.get("trap", {})
+        nas = _cfg.get("storage", {}).get("nas", {})
+        nas_cfg = {
+            "enabled": nas.get("enabled", False),
+            "server": nas.get("server", ""),
+            "share": nas.get("share", ""),
+            "remote_path": nas.get("remote_path", "/"),
+            "username": nas.get("username", ""),
+        }
         relay_state = gpio_manager.get_relay_state()
         free_mb = storage_manager.free_mb()
         return render_template(
@@ -90,6 +99,7 @@ def create_app(
             state=camera_manager.state.name,
             cam_cfg=cam_cfg,
             trap_cfg=trap_cfg,
+            nas_cfg=nas_cfg,
             relay_state=relay_state,
             free_mb=round(free_mb, 0),
             storage_low=storage_manager.is_storage_low(),
@@ -154,6 +164,22 @@ def create_app(
             "ts": time.time(),
         })
 
+    @app.get("/api/settings")
+    @require_auth
+    def api_settings_get():
+        nas = _cfg.get("storage", {}).get("nas", {})
+        return jsonify({
+            "camera": _cfg.get("camera", {}),
+            "trap": _cfg.get("trap", {}),
+            "nas": {
+                "enabled": nas.get("enabled", False),
+                "server": nas.get("server", ""),
+                "share": nas.get("share", ""),
+                "remote_path": nas.get("remote_path", "/"),
+                "username": nas.get("username", ""),
+            },
+        })
+
     @app.get("/api/recordings")
     @require_auth
     def api_recordings():
@@ -165,6 +191,31 @@ def create_app(
         recordings_path = str(storage_manager._recordings_path)
         mime = "video/mp4" if filename.endswith(".mp4") else "video/h264"
         return send_from_directory(recordings_path, filename, mimetype=mime)
+
+    @app.delete("/api/recordings/<filename>")
+    @require_auth
+    def api_delete_recording(filename: str):
+        if not re.match(r'^[\w\-\.]+$', filename):
+            return jsonify({"ok": False, "reason": "Invalid filename"}), 400
+        path = storage_manager._recordings_path / filename
+        if not path.resolve().is_relative_to(storage_manager._recordings_path.resolve()):
+            return jsonify({"ok": False, "reason": "Forbidden"}), 403
+        if not path.exists():
+            return jsonify({"ok": False, "reason": "Not found"}), 404
+        path.unlink()
+        logger.info("Recording deleted: %s", filename)
+        return jsonify({"ok": True})
+
+    @app.post("/api/recordings/<filename>/upload")
+    @require_auth
+    def api_upload_recording(filename: str):
+        if not re.match(r'^[\w\-\.]+$', filename):
+            return jsonify({"ok": False, "reason": "Invalid filename"}), 400
+        if not storage_manager._nas_enabled:
+            return jsonify({"ok": False, "reason": "NAS nicht aktiviert"}), 409
+        if not storage_manager.request_upload(filename):
+            return jsonify({"ok": False, "reason": "Datei nicht gefunden"}), 404
+        return jsonify({"ok": True, "queued": True})
 
     @app.post("/api/trigger")
     @require_auth
@@ -211,6 +262,30 @@ def create_app(
             changed_trap = True
         if changed_trap:
             camera_manager.update_config(_cfg)
+
+        # NAS settings
+        nas = _cfg.setdefault("storage", {}).setdefault("nas", {})
+        changed_nas = False
+        if "nas_enabled" in data:
+            nas["enabled"] = bool(data["nas_enabled"])
+            changed_nas = True
+        if "nas_server" in data:
+            nas["server"] = str(data["nas_server"])[:256]
+            changed_nas = True
+        if "nas_share" in data:
+            nas["share"] = str(data["nas_share"])[:256]
+            changed_nas = True
+        if "nas_remote_path" in data:
+            nas["remote_path"] = str(data["nas_remote_path"])[:512]
+            changed_nas = True
+        if "nas_username" in data:
+            nas["username"] = str(data["nas_username"])[:256]
+            changed_nas = True
+        if "nas_password" in data and data["nas_password"]:
+            nas["password"] = str(data["nas_password"])[:256]
+            changed_nas = True
+        if changed_nas:
+            storage_manager.update_config(_cfg)
 
         int_fields = {
             "af_mode": (0, 2),

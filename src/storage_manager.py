@@ -106,9 +106,17 @@ class StorageManager:
     # NAS upload                                                           #
     # ------------------------------------------------------------------ #
 
-    def _upload_and_verify(self, local_path: Path) -> None:
+    def request_upload(self, filename: str) -> bool:
+        """Queue a manual on-demand upload of a single file. Local copy is kept."""
+        path = self._recordings_path / filename
+        if not path.exists():
+            return False
+        self._executor.submit(self._upload_and_verify, path, False)
+        return True
+
+    def _upload_and_verify(self, local_path: Path, delete_local: bool = True) -> None:
         """
-        Background task: upload file to SMB NAS, verify, then delete local copy.
+        Background task: upload file to SMB NAS, verify, then optionally delete local copy.
         On any failure the local file is retained for retry on the next cycle.
         """
         try:
@@ -139,8 +147,11 @@ class StorageManager:
                     f"Size mismatch: local={local_size} remote={remote_size}"
                 )
 
-            logger.info("NAS upload verified (%d bytes). Deleting local copy.", local_size)
-            local_path.unlink()
+            if delete_local:
+                logger.info("NAS upload verified (%d bytes). Deleting local copy.", local_size)
+                local_path.unlink()
+            else:
+                logger.info("NAS upload verified (%d bytes). Local copy retained.", local_size)
 
         except Exception:
             logger.exception("NAS upload failed for %s — local file retained.", local_path.name)

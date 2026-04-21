@@ -62,133 +62,6 @@
 <div class="alert">⚠ Storage low: {{ free_mb | int }} MB remaining. Consider enabling NAS upload or clearing old recordings.</div>
 {% endif %}
 
-<!-- Camera Controls -->
-<div class="card">
-  <h2>Camera Settings</h2>
-  <form id="settingsForm">
-  <div class="grid-3">
-
-    <div>
-      <label>AF Mode</label>
-      <select name="af_mode" onchange="toggleLensPos(this.value)">
-        <option value="0" {% if cam_cfg.af_mode==0 %}selected{% endif %}>Manual</option>
-        <option value="1" {% if cam_cfg.af_mode==1 %}selected{% endif %}>Auto</option>
-        <option value="2" {% if cam_cfg.af_mode==2 %}selected{% endif %}>Continuous</option>
-      </select>
-    </div>
-
-    <div>
-      <label>AF Range</label>
-      <select name="af_range">
-        <option value="0" {% if cam_cfg.af_range==0 %}selected{% endif %}>Normal</option>
-        <option value="1" {% if cam_cfg.af_range==1 %}selected{% endif %}>Macro</option>
-        <option value="2" {% if cam_cfg.af_range==2 %}selected{% endif %}>Full</option>
-      </select>
-    </div>
-
-    <div id="lensPosRow">
-      <label>Lens Position (diopters)</label>
-      <div class="range-row">
-        <input type="range" name="lens_position" min="0" max="32" step="0.5"
-               value="{{ cam_cfg.lens_position|default(1.0) }}"
-               oninput="document.getElementById('lensVal').textContent=this.value">
-        <span class="range-val" id="lensVal">{{ cam_cfg.lens_position|default(1.0) }}</span>
-      </div>
-    </div>
-
-  </div>
-
-  <div class="grid-3" style="margin-top:1rem">
-
-    <div>
-      <label>AWB Mode</label>
-      <select name="awb_mode">
-        <option value="0" {% if cam_cfg.awb_mode==0 %}selected{% endif %}>Auto</option>
-        <option value="1" {% if cam_cfg.awb_mode==1 %}selected{% endif %}>Greyworld (NoIR)</option>
-        <option value="2" {% if cam_cfg.awb_mode==2 %}selected{% endif %}>Incandescent</option>
-        <option value="3" {% if cam_cfg.awb_mode==3 %}selected{% endif %}>Tungsten</option>
-        <option value="4" {% if cam_cfg.awb_mode==4 %}selected{% endif %}>Sunlight</option>
-        <option value="5" {% if cam_cfg.awb_mode==5 %}selected{% endif %}>Cloudy</option>
-        <option value="7" {% if cam_cfg.awb_mode==7 %}selected{% endif %}>Indoor</option>
-      </select>
-    </div>
-
-    <div>
-      <label>Contrast</label>
-      <div class="range-row">
-        <input type="range" name="contrast" min="0" max="2" step="0.1"
-               value="{{ cam_cfg.contrast|default(1.0) }}"
-               oninput="document.getElementById('contrastVal').textContent=this.value">
-        <span class="range-val" id="contrastVal">{{ cam_cfg.contrast|default(1.0) }}</span>
-      </div>
-    </div>
-
-    <div>
-      <label>Saturation</label>
-      <div class="range-row">
-        <input type="range" name="saturation" min="0" max="2" step="0.1"
-               value="{{ cam_cfg.saturation|default(1.0) }}"
-               oninput="document.getElementById('saturationVal').textContent=this.value">
-        <span class="range-val" id="saturationVal">{{ cam_cfg.saturation|default(1.0) }}</span>
-      </div>
-    </div>
-
-  </div>
-
-  <div class="grid-3" style="margin-top:1rem">
-
-    <div>
-      <label>ISO (Analogue Gain, 0=auto)</label>
-      <div class="range-row">
-        <input type="range" name="analogue_gain" min="0" max="16" step="0.5"
-               value="{{ cam_cfg.analogue_gain|default(0.0) }}"
-               oninput="document.getElementById('gainVal').textContent=this.value">
-        <span class="range-val" id="gainVal">{{ cam_cfg.analogue_gain|default(0) }}</span>
-      </div>
-    </div>
-
-    <div>
-      <label>Shutter Speed (µs, 0=auto)</label>
-      <input type="number" name="exposure_time" min="0" max="1000000" step="100"
-             value="{{ cam_cfg.exposure_time|default(0) }}">
-    </div>
-
-    <div style="display:flex; flex-direction:column; justify-content:flex-end">
-      <label>
-        <input type="checkbox" name="hdr" {% if cam_cfg.hdr %}checked{% endif %}> HDR Mode
-      </label>
-    </div>
-
-  </div>
-
-  <div class="grid-2" style="margin-top:1rem">
-    <div>
-      <label>Vorlaufzeit / Pre-Buffer (Sekunden)</label>
-      <div class="range-row">
-        <input type="range" name="pre_event_seconds" min="1" max="10" step="1"
-               value="{{ trap_cfg.pre_event_seconds|default(3) }}"
-               oninput="document.getElementById('preVal').textContent=this.value">
-        <span class="range-val" id="preVal">{{ trap_cfg.pre_event_seconds|default(3) }}</span>
-      </div>
-    </div>
-    <div>
-      <label>Nachlaufzeit / Post-Event (Sekunden)</label>
-      <div class="range-row">
-        <input type="range" name="post_event_seconds" min="1" max="120" step="1"
-               value="{{ trap_cfg.post_event_seconds|default(10) }}"
-               oninput="document.getElementById('postVal').textContent=this.value">
-        <span class="range-val" id="postVal">{{ trap_cfg.post_event_seconds|default(10) }}</span>
-      </div>
-    </div>
-  </div>
-
-  <div style="margin-top:1.2rem; display:flex; gap:.8rem">
-    <button type="submit" class="btn btn-primary">Apply Settings</button>
-    <span id="settingsFeedback" style="color:var(--green); font-size:.85rem; align-self:center"></span>
-  </div>
-  </form>
-</div>
-
 <!-- Manual Trigger -->
 <div class="card">
   <h2>Testaufnahme</h2>
@@ -196,7 +69,7 @@
     <button class="btn btn-primary" id="triggerBtn" onclick="manualTrigger()">🎬 Aufnahme starten</button>
     <span id="triggerStatus" style="color:var(--muted); font-size:.875rem"></span>
   </div>
-  <p style="margin-top:.6rem; font-size:.8rem; color:var(--muted)">Löst die Kamera wie ein PIR-Signal aus (Vorlaufzeit + Nachlaufzeit gemäß Einstellung oben). Nur im TRAP-Modus verfügbar.</p>
+  <p style="margin-top:.6rem; font-size:.8rem; color:var(--muted)">Löst die Kamera wie ein PIR-Signal aus (Pre-/Post-Event gemäß Einstellungen im Live Stream). Nur im TRAP-Modus verfügbar.</p>
 </div>
 
 <!-- Relay / Floodlight -->
@@ -209,6 +82,50 @@
       Currently: <strong>{{ 'ON' if relay_state else 'OFF' }}</strong>
     </span>
   </div>
+</div>
+
+<!-- NAS / Samba Settings -->
+<div class="card">
+  <h2>NAS / Samba</h2>
+  <form id="nasForm">
+    <div style="margin-bottom:.9rem">
+      <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.9rem">
+        <input type="checkbox" name="nas_enabled" id="nasEnabled" {% if nas_cfg.enabled %}checked{% endif %}>
+        NAS Upload aktiviert
+      </label>
+    </div>
+    <div class="grid-2">
+      <div>
+        <label>Server (IP / Hostname)</label>
+        <input type="text" name="nas_server" id="nasServer" value="{{ nas_cfg.server }}" placeholder="192.168.1.100"
+               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
+      </div>
+      <div>
+        <label>Share-Name</label>
+        <input type="text" name="nas_share" id="nasShare" value="{{ nas_cfg.share }}" placeholder="wildlife"
+               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
+      </div>
+      <div>
+        <label>Remote-Pfad</label>
+        <input type="text" name="nas_remote_path" id="nasRemotePath" value="{{ nas_cfg.remote_path }}" placeholder="/"
+               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
+      </div>
+      <div>
+        <label>Benutzername</label>
+        <input type="text" name="nas_username" id="nasUsername" value="{{ nas_cfg.username }}" placeholder="pi"
+               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
+      </div>
+      <div style="grid-column: span 2">
+        <label>Passwort</label>
+        <input type="password" name="nas_password" placeholder="(leer lassen um nicht zu ändern)"
+               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
+      </div>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center">
+      <button type="submit" class="btn btn-primary">Speichern</button>
+      <span id="nasFeedback" style="color:var(--green); font-size:.85rem"></span>
+    </div>
+  </form>
 </div>
 
 <!-- Recordings -->
@@ -231,31 +148,28 @@
 <footer>Wildlife Cam Pi 4 &mdash; IMX708 Wide NoIR</footer>
 
 <script>
-function toggleLensPos(val) {
-  document.getElementById('lensPosRow').style.opacity = val == '0' ? '1' : '0.35';
-  document.getElementById('lensPosRow').querySelector('input').disabled = val != '0';
-}
-toggleLensPos(document.querySelector('[name=af_mode]').value);
-
-document.getElementById('settingsForm').addEventListener('submit', async e => {
+// ── NAS Settings ──────────────────────────────────────────────────────────────
+document.getElementById('nasForm').addEventListener('submit', async e => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  const payload = Object.fromEntries(fd.entries());
-  // coerce types
-  ['af_mode','af_range','awb_mode','exposure_time','pre_event_seconds','post_event_seconds'].forEach(k => { if(k in payload) payload[k] = parseInt(payload[k]); });
-  ['lens_position','contrast','saturation','analogue_gain'].forEach(k => { if(k in payload) payload[k] = parseFloat(payload[k]); });
-  payload.hdr = payload.hdr === 'on';
-  const r = await fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-  document.getElementById('settingsFeedback').textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
-  setTimeout(() => document.getElementById('settingsFeedback').textContent = '', 3000);
+  const payload = {
+    nas_enabled: fd.get('nas_enabled') === 'on',
+    nas_server: fd.get('nas_server'),
+    nas_share: fd.get('nas_share'),
+    nas_remote_path: fd.get('nas_remote_path'),
+    nas_username: fd.get('nas_username'),
+  };
+  const pw = fd.get('nas_password');
+  if (pw) payload.nas_password = pw;
+  const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  document.getElementById('nasFeedback').textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
+  setTimeout(() => document.getElementById('nasFeedback').textContent = '', 3000);
 });
 
+// ── Trigger ───────────────────────────────────────────────────────────────────
 async function manualTrigger() {
   const btn = document.getElementById('triggerBtn');
   const status = document.getElementById('triggerStatus');
-  const pre = parseInt(document.querySelector('[name=pre_event_seconds]').value) || 3;
-  const post = parseInt(document.querySelector('[name=post_event_seconds]').value) || 10;
-  const totalMs = (pre + post + 3) * 1000;
   btn.disabled = true;
   btn.textContent = '⏳ Läuft…';
   status.textContent = '';
@@ -263,21 +177,24 @@ async function manualTrigger() {
   const data = await r.json();
   if (r.ok && data.ok) {
     status.style.color = 'var(--green)';
-    status.textContent = `✓ Aufnahme gestartet — dauert ~${pre + post} s`;
-    setTimeout(() => { loadRecordings(); status.textContent = ''; }, totalMs);
+    status.textContent = '✓ Aufnahme gestartet';
+    setTimeout(() => { loadRecordings(); status.textContent = ''; btn.disabled = false; btn.textContent = '🎬 Aufnahme starten'; }, 30000);
   } else {
     status.style.color = 'var(--red)';
     status.textContent = '✗ ' + (data.reason || 'Fehler – nur im TRAP-Modus möglich');
+    btn.disabled = false;
+    btn.textContent = '🎬 Aufnahme starten';
   }
-  setTimeout(() => { btn.disabled = false; btn.textContent = '🎬 Aufnahme starten'; }, totalMs);
 }
 
+// ── Relay ─────────────────────────────────────────────────────────────────────
 async function setRelay(state) {
-  const r = await fetch('/api/relay', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state}) });
+  const r = await fetch('/api/relay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) });
   const data = await r.json();
   document.getElementById('relayStatus').innerHTML = 'Currently: <strong>' + (data.relay ? 'ON' : 'OFF') + '</strong>';
 }
 
+// ── Recordings ────────────────────────────────────────────────────────────────
 async function loadRecordings() {
   const r = await fetch('/api/recordings');
   const items = await r.json();
@@ -285,13 +202,18 @@ async function loadRecordings() {
   if (!items.length) { el.innerHTML = '<em style="color:var(--muted)">Noch keine Aufnahmen.</em>'; return; }
   el.innerHTML = items.map(i => `
     <div class="stat-row">
-      <span style="font-size:.85rem">${i.filename}</span>
-      <span style="display:flex; gap:.5rem; align-items:center">
-        <span style="color:var(--muted); font-size:.8rem">${i.size_mb} MB</span>
+      <div style="font-size:.85rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:.5rem">
+        ${i.filename}<br><span style="color:var(--muted); font-size:.75rem">${i.size_mb} MB</span>
+      </div>
+      <span style="display:flex; gap:.4rem; align-items:center; flex-shrink:0; flex-wrap:wrap">
         <button class="btn btn-muted" style="font-size:.75rem; padding:.2rem .5rem"
-          onclick="playRecording('${i.url}','${i.filename}')">&#9654; Play</button>
+          onclick="playRecording('${i.url}','${i.filename}')">▶ Play</button>
         <a class="btn btn-muted" style="font-size:.75rem; padding:.2rem .5rem; text-decoration:none"
-          href="${i.url}" download="${i.filename}">⤓ Download</a>
+          href="${i.url}" download="${i.filename}">⬇ Download</a>
+        <button class="btn btn-muted" style="font-size:.75rem; padding:.2rem .5rem"
+          onclick="uploadRecording('${i.filename}', this)">☁ Upload</button>
+        <button class="btn btn-danger" style="font-size:.75rem; padding:.2rem .5rem"
+          onclick="deleteRecording('${i.filename}', this.closest('.stat-row'))">🗑 Löschen</button>
       </span>
     </div>`).join('');
 }
@@ -311,9 +233,36 @@ function closePlayer() {
   player.src = '';
   document.getElementById('playerWrap').style.display = 'none';
 }
+
+async function uploadRecording(filename, btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  const r = await fetch(`/api/recordings/${encodeURIComponent(filename)}/upload`, { method: 'POST' });
+  const data = await r.json().catch(() => ({}));
+  if (r.ok) {
+    btn.textContent = '✓ Queued';
+    btn.style.color = 'var(--green)';
+  } else {
+    btn.textContent = '✗ ' + (data.reason || 'Fehler');
+    btn.disabled = false;
+  }
+}
+
+async function deleteRecording(filename, row) {
+  if (!confirm(`"${filename}" wirklich löschen?`)) return;
+  const r = await fetch(`/api/recordings/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+  if (r.ok) {
+    row.remove();
+    if (document.getElementById('playerTitle').textContent === filename) closePlayer();
+  } else {
+    const data = await r.json().catch(() => ({}));
+    alert('Fehler: ' + (data.reason || 'Unbekannt'));
+  }
+}
+
 loadRecordings();
 
-// Poll status
+// ── Status Poll ───────────────────────────────────────────────────────────────
 async function pollStatus() {
   const r = await fetch('/api/status');
   const d = await r.json();

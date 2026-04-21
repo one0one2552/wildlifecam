@@ -5,44 +5,207 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wildlife Cam — Live Stream</title>
 <style>
-  :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --accent: #58a6ff; --red: #f85149; --text: #e6edf3; --muted: #8b949e; }
+  :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --accent: #58a6ff; --green: #3fb950; --red: #f85149; --text: #e6edf3; --muted: #8b949e; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
-  header { background: var(--card); border-bottom: 1px solid var(--border); padding: .75rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { background: var(--card); border-bottom: 1px solid var(--border); padding: .75rem 1.5rem; display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
   header h1 { font-size: 1rem; }
-  .btn { padding: .4rem 1rem; border-radius: .4rem; border: none; cursor: pointer; font-weight: 600; font-size: .85rem; }
-  .btn-muted { background: var(--border); color: var(--text); }
-  .btn-danger { background: var(--red); color: #fff; }
-  #streamWrap { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; position: relative; }
+  #content { flex: 1; display: flex; overflow: hidden; }
+  #streamWrap { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; position: relative; overflow: hidden; }
   #streamImg { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
   #streamPlaceholder { color: var(--muted); font-size: 1.1rem; }
-  #status { position: absolute; top: .75rem; left: .75rem; background: rgba(0,0,0,.6); color: var(--accent); font-size: .75rem; padding: .25rem .6rem; border-radius: .3rem; }
+  #streamStatus { position: absolute; top: .75rem; left: .75rem; background: rgba(0,0,0,.65); color: var(--accent); font-size: .75rem; padding: .25rem .6rem; border-radius: .3rem; }
   #watchdogBar { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--accent); transition: width 1s linear; }
+  /* Settings panel */
+  #settingsPanel { width: 320px; flex: 0 0 320px; background: var(--card); border-left: 1px solid var(--border); overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .7rem; }
+  #settingsPanel h2 { font-size: .82rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding-bottom: .4rem; border-bottom: 1px solid var(--border); }
+  .field label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .2rem; }
+  .field select, .field input[type=number] { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: .35rem; padding: .35rem .5rem; font-size: .85rem; }
+  .field input[type=range] { width: 100%; cursor: pointer; accent-color: var(--accent); }
+  .range-row { display: flex; align-items: center; gap: .4rem; }
+  .range-row input { flex: 1; }
+  .range-val { min-width: 2.8rem; text-align: right; font-size: .8rem; color: var(--accent); }
+  .btn { padding: .4rem 1rem; border-radius: .4rem; border: none; cursor: pointer; font-weight: 600; font-size: .85rem; transition: opacity .15s; }
+  .btn:hover { opacity: .8; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-muted { background: var(--border); color: var(--text); }
+  .btn-danger { background: var(--red); color: #fff; }
+  @media (max-width: 720px) {
+    body { overflow: auto; }
+    #content { flex-direction: column; overflow: visible; }
+    #streamWrap { height: 55vw; flex: none; }
+    #settingsPanel { width: 100%; flex: none; border-left: none; border-top: 1px solid var(--border); }
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <a href="/" style="color:var(--muted); text-decoration:none">← Dashboard</a>
+  <a href="/" style="color:var(--muted); text-decoration:none; font-size:.9rem">← Dashboard</a>
   <h1>🔴 Live Stream</h1>
   <span id="streamState" style="color:var(--muted); font-size:.85rem">Connecting…</span>
   <button class="btn btn-danger" onclick="stopStream()" style="margin-left:auto">■ Stop</button>
 </header>
 
-<div id="streamWrap">
-  <img id="streamImg" alt="Live feed">
-  <div id="streamPlaceholder">Starting camera…</div>
-  <div id="status"></div>
-  <div id="watchdogBar" style="width:100%"></div>
+<div id="content">
+  <!-- Stream -->
+  <div id="streamWrap">
+    <img id="streamImg" alt="Live feed">
+    <div id="streamPlaceholder">Starting camera…</div>
+    <div id="streamStatus"></div>
+    <div id="watchdogBar" style="width:100%"></div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div id="settingsPanel">
+    <h2>Camera Settings</h2>
+    <form id="settingsForm">
+      <div class="field">
+        <label>AF Mode</label>
+        <select name="af_mode" id="afMode" onchange="toggleLensPos(this.value)">
+          <option value="0">Manual</option>
+          <option value="1">Auto</option>
+          <option value="2">Continuous</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>AF Range</label>
+        <select name="af_range" id="afRange">
+          <option value="0">Normal</option>
+          <option value="1">Macro</option>
+          <option value="2">Full</option>
+        </select>
+      </div>
+      <div class="field" id="lensPosRow">
+        <label>Lens Position (diopters)</label>
+        <div class="range-row">
+          <input type="range" name="lens_position" min="0" max="32" step="0.5" value="1.0"
+                 oninput="document.getElementById('lensVal').textContent=this.value">
+          <span class="range-val" id="lensVal">1.0</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>AWB Mode</label>
+        <select name="awb_mode" id="awbMode">
+          <option value="0">Auto</option>
+          <option value="1">Greyworld (NoIR)</option>
+          <option value="2">Incandescent</option>
+          <option value="3">Tungsten</option>
+          <option value="4">Sunlight</option>
+          <option value="5">Cloudy</option>
+          <option value="7">Indoor</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Contrast</label>
+        <div class="range-row">
+          <input type="range" name="contrast" min="0" max="2" step="0.1" value="1.0"
+                 oninput="document.getElementById('contrastVal').textContent=this.value">
+          <span class="range-val" id="contrastVal">1.0</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Saturation</label>
+        <div class="range-row">
+          <input type="range" name="saturation" min="0" max="2" step="0.1" value="1.0"
+                 oninput="document.getElementById('saturationVal').textContent=this.value">
+          <span class="range-val" id="saturationVal">1.0</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>ISO / Analogue Gain (0 = auto)</label>
+        <div class="range-row">
+          <input type="range" name="analogue_gain" min="0" max="16" step="0.5" value="1.0"
+                 oninput="document.getElementById('gainVal').textContent=this.value">
+          <span class="range-val" id="gainVal">1.0</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Shutter Speed (µs, 0 = auto)</label>
+        <input type="number" name="exposure_time" id="exposureTime" min="0" max="1000000" step="100" value="0">
+      </div>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer">
+          <input type="checkbox" name="hdr" id="hdrCheck"> HDR Mode
+        </label>
+      </div>
+
+      <div style="border-top:1px solid var(--border); padding-top:.5rem">
+        <h2 style="border:none; margin-bottom:.6rem">Trap Timing</h2>
+        <div class="field">
+          <label>Vorlaufzeit / Pre-Buffer (s)</label>
+          <div class="range-row">
+            <input type="range" name="pre_event_seconds" min="1" max="10" step="1" value="3"
+                   oninput="document.getElementById('preVal').textContent=this.value">
+            <span class="range-val" id="preVal">3</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Nachlaufzeit / Post-Event (s)</label>
+          <div class="range-row">
+            <input type="range" name="post_event_seconds" min="1" max="120" step="1" value="10"
+                   oninput="document.getElementById('postVal').textContent=this.value">
+            <span class="range-val" id="postVal">10</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:.6rem">
+        <button type="submit" class="btn btn-primary" style="flex:1">Apply</button>
+        <span id="settingsFeedback" style="font-size:.8rem; color:var(--green)"></span>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script>
+// ── Settings ──────────────────────────────────────────────────────────────────
+function toggleLensPos(val) {
+  const row = document.getElementById('lensPosRow');
+  row.style.opacity = val == '0' ? '1' : '0.4';
+  row.querySelector('input[type=range]').disabled = val != '0';
+}
+
+async function loadSettings() {
+  const r = await fetch('/api/settings');
+  if (!r.ok) return;
+  const { camera: cam = {}, trap = {} } = await r.json();
+  const setRange = (name, val, displayId) => {
+    const el = document.querySelector(`[name="${name}"]`);
+    if (el && val != null) { el.value = val; document.getElementById(displayId).textContent = val; }
+  };
+  if (cam.af_mode != null) { document.getElementById('afMode').value = cam.af_mode; toggleLensPos(cam.af_mode); }
+  if (cam.af_range != null) document.getElementById('afRange').value = cam.af_range;
+  if (cam.awb_mode != null) document.getElementById('awbMode').value = cam.awb_mode;
+  setRange('lens_position', cam.lens_position, 'lensVal');
+  setRange('contrast', cam.contrast, 'contrastVal');
+  setRange('saturation', cam.saturation, 'saturationVal');
+  setRange('analogue_gain', cam.analogue_gain, 'gainVal');
+  if (cam.exposure_time != null) document.getElementById('exposureTime').value = cam.exposure_time;
+  if (cam.hdr != null) document.getElementById('hdrCheck').checked = cam.hdr;
+  setRange('pre_event_seconds', trap.pre_event_seconds, 'preVal');
+  setRange('post_event_seconds', trap.post_event_seconds, 'postVal');
+}
+
+document.getElementById('settingsForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const payload = Object.fromEntries(fd.entries());
+  ['af_mode','af_range','awb_mode','exposure_time','pre_event_seconds','post_event_seconds'].forEach(k => { if (k in payload) payload[k] = parseInt(payload[k]); });
+  ['lens_position','contrast','saturation','analogue_gain'].forEach(k => { if (k in payload) payload[k] = parseFloat(payload[k]); });
+  payload.hdr = payload.hdr === 'on';
+  const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const fb = document.getElementById('settingsFeedback');
+  fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
+  setTimeout(() => fb.textContent = '', 3000);
+});
+
+// ── Stream ────────────────────────────────────────────────────────────────────
 const img = document.getElementById('streamImg');
 const placeholder = document.getElementById('streamPlaceholder');
 const stateEl = document.getElementById('streamState');
-const statusEl = document.getElementById('status');
+const statusEl = document.getElementById('streamStatus');
 const watchdogBar = document.getElementById('watchdogBar');
-
 const WATCHDOG_SECS = 180;
 let watchdogStart = null;
 
@@ -67,11 +230,10 @@ function tickWatchdog() {
   if (!watchdogStart) return;
   const elapsed = (Date.now() - watchdogStart) / 1000;
   const remaining = Math.max(0, WATCHDOG_SECS - elapsed);
-  const pct = (remaining / WATCHDOG_SECS) * 100;
-  watchdogBar.style.width = pct + '%';
-  statusEl.textContent = `Watchdog: ${Math.ceil(remaining)}s remaining`;
+  watchdogBar.style.width = ((remaining / WATCHDOG_SECS) * 100) + '%';
+  statusEl.textContent = `Watchdog: ${Math.ceil(remaining)}s`;
   if (remaining > 0) setTimeout(tickWatchdog, 1000);
-  else stateEl.textContent = 'Watchdog expired — reverting';
+  else stateEl.textContent = 'Watchdog abgelaufen';
 }
 
 async function stopStream() {
@@ -80,11 +242,9 @@ async function stopStream() {
   window.location.href = '/';
 }
 
-// Stop stream if user navigates away
-window.addEventListener('beforeunload', () => {
-  navigator.sendBeacon('/api/stream/stop');
-});
+window.addEventListener('beforeunload', () => navigator.sendBeacon('/api/stream/stop'));
 
+loadSettings();
 startStream();
 </script>
 </body>
