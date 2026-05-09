@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O.W.L. Wildlife Cam — Einstellungen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F4F7FA;
+    --card: #FFFFFF;
+    --border: #D0DCE8;
+    --primary: #0A2540;
+    --accent: #00E5FF;
+    --cta: #00C2D1;
+    --cta-dark: #009CAB;
+    --text: #0A2540;
+    --muted: #526478;
+    --green: #1DB954;
+    --red: #E53935;
+    --shadow: 0 2px 12px rgba(10,37,64,.08);
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+
+  header {
+    background: var(--primary);
+    padding: .75rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 16px rgba(10,37,64,.3);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo-wrap { display: flex; align-items: center; gap: .75rem; }
+  .logo-img { height: 44px; width: auto; border-radius: 6px; }
+  .logo-title { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.2rem; color: #fff; letter-spacing: .02em; }
+  .logo-title .dot { color: var(--accent); }
+  .logo-sub { font-weight: 400; font-size: .82rem; opacity: .65; }
+  .nav-links { margin-left: auto; display: flex; gap: .6rem; align-items: center; }
+  .nav-links a { color: rgba(255,255,255,.7); text-decoration: none; font-size: .85rem; padding: .3rem .7rem; border-radius: 6px; transition: background .15s; }
+  .nav-links a:hover, .nav-links a.active { background: rgba(255,255,255,.12); color: #fff; }
+
+  main { max-width: 980px; margin: 2rem auto; padding: 0 1.25rem; display: grid; gap: 1.25rem; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow); }
+  .card h2 { font-family: 'Outfit', sans-serif; font-size: .78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .09em; margin-bottom: 1.1rem; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: .3rem; font-weight: 500; }
+  select, input[type=text], input[type=password], input[type=number] {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: .45rem .65rem; font-size: .875rem; font-family: 'Inter', sans-serif;
+    outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  select:focus, input:focus { border-color: var(--cta); box-shadow: 0 0 0 3px rgba(0,194,209,.15); }
+
+  .btn { padding: .5rem 1.25rem; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: .875rem; font-family: 'Inter', sans-serif; transition: opacity .15s, box-shadow .15s; }
+  .btn:hover { opacity: .87; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+  .btn-primary { background: var(--cta); color: #fff; }
+  .btn-danger  { background: var(--red); color: #fff; }
+  .btn-muted   { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+  .btn-green   { background: var(--green); color: #fff; }
+
+  /* WiFi list */
+  .wifi-item { display: flex; align-items: center; justify-content: space-between; padding: .55rem 0; border-bottom: 1px solid var(--border); }
+  .wifi-item:last-child { border-bottom: none; }
+  .wifi-ssid { font-size: .9rem; }
+  .wifi-signal { font-family: 'JetBrains Mono', monospace; font-size: .75rem; color: var(--muted); }
+  .wifi-active { color: var(--green); font-weight: 600; font-size: .75rem; }
+  .wifi-security { font-size: .72rem; color: var(--muted); background: var(--bg); padding: .1rem .4rem; border-radius: 4px; border: 1px solid var(--border); }
+
+  /* Log viewer */
+  #logBox {
+    background: var(--primary);
+    color: #a8d8ff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem;
+    padding: 1rem;
+    border-radius: var(--radius);
+    overflow-y: auto;
+    height: 400px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .log-controls { display: flex; gap: .6rem; align-items: center; margin-bottom: .75rem; flex-wrap: wrap; }
+  .log-controls label { margin: 0; }
+
+  footer { text-align: center; color: var(--muted); font-size: .75rem; padding: 2.5rem 1rem; font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <img src="/static/logo.jpg" alt="O.W.L. Logo" class="logo-img">
+    <span class="logo-title">O<span class="dot">·</span>W<span class="dot">·</span>L <span class="logo-sub">Wildlife Cam</span></span>
+  </div>
+  <nav class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/stream">Live Stream</a>
+    <a href="/settings" class="active">Einstellungen</a>
+    <button class="btn btn-muted" style="font-size:.8rem; padding:.3rem .7rem" onclick="logout()">⏻ Logout</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- Trap Timing -->
+<div class="card">
+  <h2>Trap Timing (Aufnahmezeiten)</h2>
+  <form id="trapForm">
+    <div class="grid-2">
+      <div>
+        <label>Vorlaufzeit / Pre-Buffer (s)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="pre_event_seconds" id="preEvent" min="1" max="10" step="1" value="3"
+                 oninput="document.getElementById('preVal').textContent=this.value" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="preVal" style="min-width:2.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">3</span>
+        </div>
+      </div>
+      <div>
+        <label>Nachlaufzeit / Post-Event (s)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="post_event_seconds" id="postEvent" min="1" max="120" step="1" value="10"
+                 oninput="document.getElementById('postVal').textContent=this.value" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="postVal" style="min-width:2.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">10</span>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center">
+      <button type="submit" class="btn btn-primary">Speichern</button>
+      <span id="trapFeedback" style="color:var(--green); font-size:.85rem"></span>
+    </div>
+  </form>
+</div>
+
+<!-- NAS / Samba Settings -->
+<div class="card">
+  <h2>NAS / Samba</h2>
+  <form id="nasForm">
+    <div style="margin-bottom:.9rem">
+      <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.9rem">
+        <input type="checkbox" name="nas_enabled" id="nasEnabled">
+        NAS Upload aktiviert
+      </label>
+    </div>
+    <div class="grid-2">
+      <div>
+        <label>Server (IP / Hostname)</label>
+        <input type="text" name="nas_server" id="nasServer" placeholder="192.168.1.100">
+      </div>
+      <div>
+        <label>Share-Name</label>
+        <input type="text" name="nas_share" id="nasShare" placeholder="wildlife">
+      </div>
+      <div>
+        <label>Remote-Pfad</label>
+        <input type="text" name="nas_remote_path" id="nasRemotePath" placeholder="/">
+      </div>
+      <div>
+        <label>Benutzername</label>
+        <input type="text" name="nas_username" id="nasUsername" placeholder="pi">
+      </div>
+      <div style="grid-column: span 2">
+        <label>Passwort</label>
+        <input type="password" name="nas_password" placeholder="(leer lassen um nicht zu ändern)">
+      </div>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center; flex-wrap:wrap">
+      <button type="submit" class="btn btn-primary">Speichern</button>
+      <button type="button" class="btn btn-muted" onclick="testNas()">🔌 Verbindung testen</button>
+      <span id="nasFeedback" style="color:var(--green); font-size:.85rem"></span>
+    </div>
+  </form>
+</div>
+
+<!-- WiFi Settings -->
+<div class="card">
+  <h2>WLAN / WiFi</h2>
+  <p style="font-size:.82rem; color:var(--muted); margin-bottom:1rem">
+    Aktuell verbunden mit: <strong id="currentSsid">…</strong>
+    <button class="btn btn-muted" style="font-size:.75rem; padding:.2rem .6rem; margin-left:.6rem" onclick="scanWifi()">🔄 Scannen</button>
+  </p>
+  <div id="wifiList" style="margin-bottom:1rem"></div>
+  <form id="wifiForm" style="display:none">
+    <p style="font-size:.82rem; color:var(--muted); margin-bottom:.6rem">Verbinden mit: <strong id="connectSsidLabel"></strong></p>
+    <input type="hidden" name="ssid" id="wifiSsid">
+    <div style="margin-bottom:.6rem">
+      <label>Passwort</label>
+      <input type="password" name="password" id="wifiPassword" placeholder="(leer bei offenen Netzwerken)">
+    </div>
+    <div style="display:flex; gap:.6rem; align-items:center">
+      <button type="submit" class="btn btn-primary">Verbinden</button>
+      <button type="button" class="btn btn-muted" onclick="document.getElementById('wifiForm').style.display='none'">Abbrechen</button>
+      <span id="wifiFeedback" style="font-size:.82rem"></span>
+    </div>
+  </form>
+</div>
+
+{% if is_admin %}
+<!-- Change own password -->
+<div class="card">
+  <h2>Eigenes Passwort ändern</h2>
+  <form id="chpassForm" style="display:grid; grid-template-columns:1fr 1fr; gap:.6rem">
+    <div>
+      <label>Neues Passwort</label>
+      <input type="password" name="new_pw" id="newPw" autocomplete="new-password">
+    </div>
+    <div style="display:flex; align-items:flex-end; gap:.6rem">
+      <button type="submit" class="btn btn-primary" style="flex:1">Passwort ändern</button>
+      <span id="chpassFeedback" style="font-size:.82rem"></span>
+    </div>
+  </form>
+</div>
+
+<!-- User Management -->
+<div class="card">
+  <h2>Benutzerverwaltung</h2>
+  <div id="userList" style="margin-bottom:1rem"></div>
+
+  <form id="addUserForm" style="border-top:1px solid var(--border); padding-top:.8rem; display:grid; grid-template-columns:1fr 1fr; gap:.6rem">
+    <div>
+      <label>Benutzername</label>
+      <input type="text" name="new_username" id="newUsername" placeholder="max.mustermann" autocomplete="off">
+    </div>
+    <div>
+      <label>Passwort</label>
+      <input type="password" name="new_password" id="newPassword" autocomplete="new-password">
+    </div>
+    <div>
+      <label>Rolle</label>
+      <select name="new_role" id="newRole">
+        <option value="user">Benutzer</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div style="display:flex; align-items:flex-end; gap:.6rem">
+      <button type="submit" class="btn btn-primary" style="flex:1">Benutzer hinzufügen</button>
+      <span id="addUserFeedback" style="font-size:.82rem"></span>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<!-- System Health -->
+<div class="card">
+  <h2>System Health</h2>
+  <div style="display:flex; gap:.6rem; align-items:center; margin-bottom:.9rem">
+    <button class="btn btn-muted" style="font-size:.8rem; padding:.3rem .7rem" onclick="loadHealth()">🔄 Aktualisieren</button>
+    <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer; margin:0; font-size:.82rem">
+      <input type="checkbox" id="healthAutoRefresh" onchange="toggleHealthRefresh()"> Auto-Refresh (10s)
+    </label>
+  </div>
+  <div id="healthGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:.65rem 1.5rem">
+    <em style="color:var(--muted); font-size:.85rem; grid-column:span 2">Lade…</em>
+  </div>
+</div>
+
+<!-- Application Logs -->
+<div class="card">
+  <h2>Anwendungslog</h2>
+  <div class="log-controls">
+    <label>Zeilen:</label>
+    <select id="logLines" onchange="loadLogs()">
+      <option value="100">100</option>
+      <option value="200" selected>200</option>
+      <option value="500">500</option>
+      <option value="1000">1000</option>
+    </select>
+    <button class="btn btn-muted" style="font-size:.8rem; padding:.3rem .7rem" onclick="loadLogs()">🔄 Aktualisieren</button>
+    <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer; margin:0">
+      <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()"> Auto-Refresh (5s)
+    </label>
+    <button class="btn btn-muted" style="font-size:.8rem; padding:.3rem .7rem; margin-left:auto" onclick="scrollLogToBottom()">⬇ Ende</button>
+  </div>
+  <div id="logBox">Lade Logs…</div>
+</div>
+
+</main>
+<footer>O·W·L Open Work Lab &mdash; Wildlife Cam Pi 4 &mdash; IMX708 Wide NoIR</footer>
+
+<script>
+// ── NAS Settings ──────────────────────────────────────────────────────────────
+async function loadNasSettings() {
+  const r = await fetch('/api/settings');
+  if (!r.ok) return;
+  const { nas = {} } = await r.json();
+  document.getElementById('nasEnabled').checked = !!nas.enabled;
+  document.getElementById('nasServer').value = nas.server || '';
+  document.getElementById('nasShare').value = nas.share || '';
+  document.getElementById('nasRemotePath').value = nas.remote_path || '/';
+  document.getElementById('nasUsername').value = nas.username || '';
+}
+
+document.getElementById('nasForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const payload = {
+    nas_enabled: fd.get('nas_enabled') === 'on',
+    nas_server: fd.get('nas_server'),
+    nas_share: fd.get('nas_share'),
+    nas_remote_path: fd.get('nas_remote_path'),
+    nas_username: fd.get('nas_username'),
+  };
+  const pw = fd.get('nas_password');
+  if (pw) payload.nas_password = pw;
+  const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const fb = document.getElementById('nasFeedback');
+  fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
+  setTimeout(() => fb.textContent = '', 3000);
+});
+
+async function testNas() {
+  const fb = document.getElementById('nasFeedback');
+  fb.style.color = 'var(--muted)';
+  fb.textContent = '🔌 Teste Verbindung…';
+  try {
+    const r = await fetch('/api/nas/test', { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      fb.style.color = 'var(--green)';
+      fb.textContent = '✓ ' + data.msg;
+    } else {
+      fb.style.color = 'var(--red)';
+      fb.textContent = '✗ ' + (data.reason || 'Verbindung fehlgeschlagen');
+    }
+  } catch {
+    fb.style.color = 'var(--red)';
+    fb.textContent = '✗ Netzwerkfehler';
+  }
+  setTimeout(() => { fb.textContent = ''; fb.style.color = 'var(--green)'; }, 6000);
+}
+
+// ── WiFi ──────────────────────────────────────────────────────────────────────
+async function scanWifi() {
+  document.getElementById('wifiList').innerHTML = '<em style="color:var(--muted); font-size:.82rem">Scanne…</em>';
+  const r = await fetch('/api/wifi');
+  const data = await r.json();
+  document.getElementById('currentSsid').textContent = data.current || '—';
+  if (data.error && !data.networks.length) {
+    document.getElementById('wifiList').innerHTML = `<em style="color:var(--red); font-size:.82rem">${data.error}</em>`;
+    return;
+  }
+  if (!data.networks.length) {
+    document.getElementById('wifiList').innerHTML = '<em style="color:var(--muted); font-size:.82rem">Keine Netzwerke gefunden.</em>';
+    return;
+  }
+  document.getElementById('wifiList').innerHTML = data.networks.map(n => `
+    <div class="wifi-item">
+      <div>
+        <span class="wifi-ssid">${n.ssid}</span>
+        ${n.active ? ' <span class="wifi-active">✓ verbunden</span>' : ''}
+        ${n.security ? ` <span class="wifi-security">🔒 ${n.security}</span>` : ''}
+      </div>
+      <div style="display:flex; gap:.5rem; align-items:center">
+        <span class="wifi-signal">${signalBars(n.signal)} ${n.signal}%</span>
+        ${!n.active ? `<button class="btn btn-muted" style="font-size:.72rem; padding:.15rem .5rem" onclick="prepareConnect('${n.ssid.replace(/'/g,"\\'")}', '${n.security}')">Verbinden</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function signalBars(s) {
+  if (s >= 75) return '████';
+  if (s >= 50) return '███░';
+  if (s >= 25) return '██░░';
+  return '█░░░';
+}
+
+function prepareConnect(ssid, security) {
+  document.getElementById('wifiSsid').value = ssid;
+  document.getElementById('connectSsidLabel').textContent = ssid;
+  document.getElementById('wifiPassword').value = '';
+  document.getElementById('wifiFeedback').textContent = '';
+  const form = document.getElementById('wifiForm');
+  // hide password field for open networks
+  document.getElementById('wifiPassword').closest('div').style.display = security ? 'block' : 'none';
+  form.style.display = 'block';
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+document.getElementById('wifiForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fb = document.getElementById('wifiFeedback');
+  fb.style.color = 'var(--muted)';
+  fb.textContent = '⏳ Verbinde…';
+  const payload = {
+    ssid: document.getElementById('wifiSsid').value,
+    password: document.getElementById('wifiPassword').value,
+  };
+  const r = await fetch('/api/wifi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const data = await r.json();
+  if (r.ok && data.ok) {
+    fb.style.color = 'var(--green)';
+    fb.textContent = '✓ Verbunden';
+    document.getElementById('currentSsid').textContent = payload.ssid;
+    setTimeout(() => { document.getElementById('wifiForm').style.display = 'none'; scanWifi(); }, 1500);
+  } else {
+    fb.style.color = 'var(--red)';
+    fb.textContent = '✗ ' + (data.reason || 'Fehler');
+  }
+});
+
+// ── Logs ──────────────────────────────────────────────────────────────────────
+let _autoRefreshTimer = null;
+
+async function loadLogs() {
+  const lines = document.getElementById('logLines').value;
+  const r = await fetch(`/api/logs?lines=${lines}`);
+  const data = await r.json();
+  const box = document.getElementById('logBox');
+  box.textContent = (data.lines || []).join('');
+  scrollLogToBottom();
+}
+
+function scrollLogToBottom() {
+  const box = document.getElementById('logBox');
+  box.scrollTop = box.scrollHeight;
+}
+
+function toggleAutoRefresh() {
+  if (document.getElementById('autoRefresh').checked) {
+    _autoRefreshTimer = setInterval(loadLogs, 5000);
+  } else {
+    clearInterval(_autoRefreshTimer);
+    _autoRefreshTimer = null;
+  }
+}
+
+// ── Trap Timing ───────────────────────────────────────────────────────────────
+async function loadTrapSettings() {
+  const r = await fetch('/api/settings');
+  if (!r.ok) return;
+  const { trap = {} } = await r.json();
+  if (trap.pre_event_seconds != null) {
+    document.getElementById('preEvent').value = trap.pre_event_seconds;
+    document.getElementById('preVal').textContent = trap.pre_event_seconds;
+  }
+  if (trap.post_event_seconds != null) {
+    document.getElementById('postEvent').value = trap.post_event_seconds;
+    document.getElementById('postVal').textContent = trap.post_event_seconds;
+  }
+}
+
+document.getElementById('trapForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fb = document.getElementById('trapFeedback');
+  const payload = {
+    pre_event_seconds: parseInt(document.getElementById('preEvent').value),
+    post_event_seconds: parseInt(document.getElementById('postEvent').value),
+  };
+  const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
+  setTimeout(() => fb.textContent = '', 3000);
+});
+
+// ── Health Data ───────────────────────────────────────────────────────────────
+let _healthRefreshTimer = null;
+
+function _hRow(label, now, peak, unit = '', peakLabel = 'Max') {
+  const peakStr = peak != null ? `<span style="color:var(--muted)">${peakLabel}: ${peak}${unit}</span>` : '';
+  return `
+  <div style="border-bottom:1px solid var(--border); padding:.45rem 0">
+    <div style="font-size:.75rem; color:var(--muted); margin-bottom:.15rem">${label}</div>
+    <div style="font-size:1rem; font-family:'JetBrains Mono',monospace; font-weight:600">${now != null ? now + unit : '–'} ${peakStr}</div>
+  </div>`;
+}
+
+function _fmtUptime(secs) {
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return (d ? d + 'd ' : '') + h + 'h ' + m + 'm';
+}
+
+async function loadHealth() {
+  const r = await fetch('/api/health');
+  if (!r.ok) return;
+  const d = await r.json();
+  const el = document.getElementById('healthGrid');
+  el.innerHTML =
+    _hRow('CPU-Temperatur', d.temp_now, d.temp_max, ' °C') +
+    _hRow('Versorgungsspannung', d.voltage_now, d.voltage_min, ' V', 'Min') +
+    _hRow('CPU-Last', d.cpu_now, d.cpu_max, ' %') +
+    _hRow('RAM-Auslastung', d.ram_now, d.ram_max, ' %') +
+    `<div style="border-bottom:1px solid var(--border); padding:.45rem 0">
+      <div style="font-size:.75rem; color:var(--muted); margin-bottom:.15rem">RAM (absolut)</div>
+      <div style="font-size:1rem; font-family:'JetBrains Mono',monospace; font-weight:600">${d.ram_used_mb} / ${d.ram_total_mb} MB</div>
+    </div>` +
+    `<div style="border-bottom:1px solid var(--border); padding:.45rem 0">
+      <div style="font-size:.75rem; color:var(--muted); margin-bottom:.15rem">Uptime</div>
+      <div style="font-size:1rem; font-family:'JetBrains Mono',monospace; font-weight:600">${_fmtUptime(d.uptime_secs)}</div>
+    </div>` +
+    `<div style="border-bottom:1px solid var(--border); padding:.45rem 0; grid-column:span 2">
+      <div style="font-size:.75rem; color:var(--muted); margin-bottom:.15rem">Unterspannung</div>
+      <div style="font-size:.9rem; font-weight:600; color:${d.throttled ? 'var(--red)' : 'var(--green)'}">${d.throttled ? '⚡ Unterspannung erkannt' : '✓ OK'}</div>
+    </div>`;
+}
+
+function toggleHealthRefresh() {
+  if (document.getElementById('healthAutoRefresh').checked) {
+    _healthRefreshTimer = setInterval(loadHealth, 10000);
+  } else {
+    clearInterval(_healthRefreshTimer);
+    _healthRefreshTimer = null;
+  }
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function logout() {
+  try { await fetch('/logout', { headers: { 'Authorization': 'Basic ' + btoa('logout:logout') } }); } catch {}
+  window.location.href = '/logout';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadNasSettings();
+loadTrapSettings();
+scanWifi();
+loadLogs();
+loadHealth();
+
+{% if is_admin %}
+// ── User Management ───────────────────────────────────────────────────────────
+async function loadUsers() {
+  const r = await fetch('/api/users');
+  if (!r.ok) return;
+  const users = await r.json();
+  const el = document.getElementById('userList');
+  if (!users.length) { el.innerHTML = '<em style="color:var(--muted)">Keine Benutzer.</em>'; return; }
+  el.innerHTML = users.map(u => `
+    <div style="display:flex; align-items:center; gap:.6rem; padding:.4rem 0; border-bottom:1px solid var(--border)">
+      <span style="flex:1; font-weight:600">${u.username}</span>
+      <span class="badge" style="background:${u.role==='admin'?'var(--cta)':'var(--muted)'}; color:#fff; font-size:.72rem; padding:.15rem .5rem">${u.role}</span>
+      <button class="btn btn-danger" style="font-size:.72rem; padding:.2rem .5rem" onclick="deleteUser('${u.username}')">🗑 Löschen</button>
+    </div>`).join('');
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Benutzer "${username}" wirklich löschen?`)) return;
+  const r = await fetch('/api/users/' + encodeURIComponent(username), { method: 'DELETE' });
+  const data = await r.json().catch(() => ({}));
+  if (r.ok) { loadUsers(); }
+  else { alert('Fehler: ' + (data.reason || r.status)); }
+}
+
+document.getElementById('addUserForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fb = document.getElementById('addUserFeedback');
+  const payload = {
+    username: document.getElementById('newUsername').value.trim(),
+    password: document.getElementById('newPassword').value,
+    role: document.getElementById('newRole').value,
+  };
+  const r = await fetch('/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  const data = await r.json().catch(() => ({}));
+  if (r.ok) {
+    fb.style.color = 'var(--green)'; fb.textContent = '✓ Hinzugefügt';
+    e.target.reset(); loadUsers();
+  } else {
+    fb.style.color = 'var(--red)'; fb.textContent = '✗ ' + (data.reason || 'Fehler');
+  }
+  setTimeout(() => fb.textContent = '', 4000);
+});
+
+document.getElementById('chpassForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fb = document.getElementById('chpassFeedback');
+  const pw = document.getElementById('newPw').value;
+  if (!pw) { fb.style.color='var(--red)'; fb.textContent='Passwort eingeben'; return; }
+  const r = await fetch('/api/users/{{ current_username }}', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ password: pw }),
+  });
+  const data = await r.json().catch(() => ({}));
+  fb.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+  fb.textContent = r.ok ? '✓ Gespeichert' : ('✗ ' + (data.reason || 'Fehler'));
+  if (r.ok) e.target.reset();
+  setTimeout(() => fb.textContent = '', 4000);
+});
+
+loadUsers();
+{% endif %}
+</script>
+</body>
+</html>

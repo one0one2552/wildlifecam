@@ -1,35 +1,118 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wildlife Cam — Live Stream</title>
+<title>O.W.L. — Live Stream</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --accent: #58a6ff; --green: #3fb950; --red: #f85149; --text: #e6edf3; --muted: #8b949e; }
+  :root {
+    --bg: #F4F7FA;
+    --card: #FFFFFF;
+    --border: #D0DCE8;
+    --primary: #0A2540;
+    --accent: #00E5FF;
+    --cta: #00C2D1;
+    --text: #0A2540;
+    --muted: #526478;
+    --green: #1DB954;
+    --red: #E53935;
+    --radius: 10px;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-  header { background: var(--card); border-bottom: 1px solid var(--border); padding: .75rem 1.5rem; display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
-  header h1 { font-size: 1rem; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ── Header ── */
+  header {
+    background: var(--primary);
+    padding: .65rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 16px rgba(10,37,64,.3);
+  }
+  .logo-wrap { display: flex; align-items: center; gap: .6rem; }
+  .logo-img { height: 36px; width: auto; border-radius: 5px; transition: filter .35s ease; cursor: pointer; }
+  .logo-img:hover { filter: drop-shadow(0 0 7px #00E5FF) drop-shadow(0 0 14px #00C2D1); }
+  .logo-title { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.05rem; color: #fff; }
+  .logo-title .dot { color: var(--accent); }
+  a.back { color: rgba(255,255,255,.6); text-decoration: none; font-size: .85rem; }
+  a.back:hover { color: #fff; }
+  .nav-links { display: flex; gap: .5rem; align-items: center; }
+  .nav-links a { color: rgba(255,255,255,.7); text-decoration: none; font-size: .82rem; padding: .3rem .6rem; border-radius: 6px; transition: background .15s; }
+  .nav-links a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  #streamState { color: rgba(255,255,255,.6); font-size: .85rem; }
+  #streamState.live { color: #FF6B6B; font-weight: 600; }
+
+  /* ── Stream area ── */
   #content { flex: 1; display: flex; overflow: hidden; }
   #streamWrap { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; position: relative; overflow: hidden; }
   #streamImg { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
-  #streamPlaceholder { color: var(--muted); font-size: 1.1rem; }
-  #streamStatus { position: absolute; top: .75rem; left: .75rem; background: rgba(0,0,0,.65); color: var(--accent); font-size: .75rem; padding: .25rem .6rem; border-radius: .3rem; }
-  #watchdogBar { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--accent); transition: width 1s linear; }
-  /* Settings panel */
-  #settingsPanel { width: 320px; flex: 0 0 320px; background: var(--card); border-left: 1px solid var(--border); overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .7rem; }
-  #settingsPanel h2 { font-size: .82rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding-bottom: .4rem; border-bottom: 1px solid var(--border); }
-  .field label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .2rem; }
-  .field select, .field input[type=number] { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: .35rem; padding: .35rem .5rem; font-size: .85rem; }
-  .field input[type=range] { width: 100%; cursor: pointer; accent-color: var(--accent); }
+  #streamPlaceholder { color: rgba(255,255,255,.4); font-size: 1rem; }
+  #streamStatus {
+    position: absolute; top: .75rem; left: .75rem;
+    background: rgba(10,37,64,.75);
+    color: var(--accent);
+    font-size: .72rem;
+    padding: .25rem .6rem;
+    border-radius: .3rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  #watchdogBar { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--cta); transition: width 1s linear; }
+
+  /* ── Settings panel ── */
+  #settingsPanel {
+    width: 310px;
+    flex: 0 0 310px;
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .65rem;
+  }
+  #settingsPanel h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .field label { display: block; font-size: .78rem; color: var(--muted); margin-bottom: .2rem; font-weight: 500; }
+  .field select, .field input[type=number] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: .35rem .5rem;
+    font-size: .82rem;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .field select:focus, .field input[type=number]:focus {
+    border-color: var(--cta);
+    box-shadow: 0 0 0 3px rgba(0,194,209,.15);
+  }
+  .field input[type=range] { width: 100%; cursor: pointer; accent-color: var(--cta); }
   .range-row { display: flex; align-items: center; gap: .4rem; }
   .range-row input { flex: 1; }
-  .range-val { min-width: 2.8rem; text-align: right; font-size: .8rem; color: var(--accent); }
-  .btn { padding: .4rem 1rem; border-radius: .4rem; border: none; cursor: pointer; font-weight: 600; font-size: .85rem; transition: opacity .15s; }
-  .btn:hover { opacity: .8; }
-  .btn-primary { background: var(--accent); color: #000; }
-  .btn-muted { background: var(--border); color: var(--text); }
-  .btn-danger { background: var(--red); color: #fff; }
+  .range-val { min-width: 2.8rem; text-align: right; font-size: .78rem; color: var(--cta); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+  .btn { padding: .4rem 1rem; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: .82rem; font-family: 'Inter', sans-serif; transition: opacity .15s; }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--cta);  color: #fff; }
+  .btn-muted   { background: var(--bg);   color: var(--text); border: 1px solid var(--border); }
+  .btn-danger  { background: var(--red);  color: #fff; }
+  .btn-green   { background: var(--green); color: #fff; }
+
   @media (max-width: 720px) {
     body { overflow: auto; }
     #content { flex-direction: column; overflow: visible; }
@@ -41,17 +124,26 @@
 <body>
 
 <header>
-  <a href="/" style="color:var(--muted); text-decoration:none; font-size:.9rem">← Dashboard</a>
-  <h1>🔴 Live Stream</h1>
-  <span id="streamState" style="color:var(--muted); font-size:.85rem">Connecting…</span>
-  <button class="btn btn-danger" onclick="stopStream()" style="margin-left:auto">■ Stop</button>
+  <a href="/" class="back">← Dashboard</a>
+  <div class="logo-wrap">
+    <img src="/static/logo.jpg" alt="O.W.L. Logo" class="logo-img">
+    <span class="logo-title">O<span class="dot">·</span>W<span class="dot">·</span>L</span>
+  </div>
+  <span>🔴</span>
+  <span id="streamState">Verbinde…</span>
+  <nav class="nav-links" style="margin-left:auto">
+    <a href="/">Dashboard</a>
+    <a href="/settings">Einstellungen</a>
+    <button class="btn btn-muted" style="font-size:.78rem; padding:.25rem .6rem" onclick="logout()">⏻ Logout</button>
+    <button class="btn btn-danger" onclick="stopStream()" style="font-size:.82rem; padding:.3rem .8rem">■ Stop</button>
+  </nav>
 </header>
 
 <div id="content">
   <!-- Stream -->
   <div id="streamWrap">
     <img id="streamImg" alt="Live feed">
-    <div id="streamPlaceholder">Starting camera…</div>
+    <div id="streamPlaceholder">Kamera startet…</div>
     <div id="streamStatus"></div>
     <div id="watchdogBar" style="width:100%"></div>
   </div>
@@ -83,18 +175,41 @@
                  oninput="document.getElementById('lensVal').textContent=this.value">
           <span class="range-val" id="lensVal">1.0</span>
         </div>
+        <!-- Focus range reference table -->
+        <table style="width:100%; border-collapse:collapse; margin-top:.5rem; font-size:.7rem; color:var(--muted)">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left; padding:.2rem .3rem; font-weight:600">Wert</th>
+              <th style="text-align:left; padding:.2rem .3rem; font-weight:600">Bereich</th>
+              <th style="text-align:left; padding:.2rem .3rem; font-weight:600">Distanz (ca.)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="padding:.15rem .3rem">0</td><td style="padding:.15rem .3rem">Unendlich</td><td style="padding:.15rem .3rem">&gt; 3 m bis Horizont</td></tr>
+            <tr><td style="padding:.15rem .3rem">1 – 10</td><td style="padding:.15rem .3rem">Fernbereich</td><td style="padding:.15rem .3rem">ca. 1 – 3 m</td></tr>
+            <tr><td style="padding:.15rem .3rem">11 – 20</td><td style="padding:.15rem .3rem">Mittlerer Bereich</td><td style="padding:.15rem .3rem">ca. 50 cm – 1 m</td></tr>
+            <tr><td style="padding:.15rem .3rem">21 – 30</td><td style="padding:.15rem .3rem">Nahbereich</td><td style="padding:.15rem .3rem">ca. 10 – 50 cm</td></tr>
+            <tr><td style="padding:.15rem .3rem">31 – 32</td><td style="padding:.15rem .3rem">Makro / Limit</td><td style="padding:.15rem .3rem">ca. 5 – 10 cm</td></tr>
+          </tbody>
+        </table>
       </div>
       <div class="field">
         <label>AWB Mode</label>
         <select name="awb_mode" id="awbMode">
           <option value="0">Auto</option>
-          <option value="1">Greyworld (NoIR)</option>
-          <option value="2">Incandescent</option>
-          <option value="3">Tungsten</option>
-          <option value="4">Sunlight</option>
-          <option value="5">Cloudy</option>
-          <option value="7">Indoor</option>
+          <option value="1">Incandescent (2500–3000K)</option>
+          <option value="2">Tungsten (3000–3500K)</option>
+          <option value="3">Fluorescent (4000–4700K)</option>
+          <option value="4">Indoor (3000–5000K)</option>
+          <option value="5">Daylight (5500–6500K)</option>
+          <option value="6">Cloudy (7000–8500K)</option>
+          <option value="7">Custom</option>
         </select>
+      </div>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer">
+          <input type="checkbox" name="night_vision" id="nightVisionCheck" onchange="toggleNightVision(this.checked)"> Nacht-Modus (NoIR IR-only, deaktiviert AWB)
+        </label>
       </div>
       <div class="field">
         <label>Contrast</label>
@@ -129,41 +244,72 @@
           <input type="checkbox" name="hdr" id="hdrCheck"> HDR Mode
         </label>
       </div>
-
-      <div style="border-top:1px solid var(--border); padding-top:.5rem">
-        <h2 style="border:none; margin-bottom:.6rem">Trap Timing</h2>
-        <div class="field">
-          <label>Vorlaufzeit / Pre-Buffer (s)</label>
-          <div class="range-row">
-            <input type="range" name="pre_event_seconds" min="1" max="10" step="1" value="3"
-                   oninput="document.getElementById('preVal').textContent=this.value">
-            <span class="range-val" id="preVal">3</span>
-          </div>
-        </div>
-        <div class="field">
-          <label>Nachlaufzeit / Post-Event (s)</label>
-          <div class="range-row">
-            <input type="range" name="post_event_seconds" min="1" max="120" step="1" value="10"
-                   oninput="document.getElementById('postVal').textContent=this.value">
-            <span class="range-val" id="postVal">10</span>
-          </div>
-        </div>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer">
+          <input type="checkbox" name="hflip" id="hflipCheck"> Bild horizontal spiegeln (H-Flip)
+        </label>
+      </div>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer">
+          <input type="checkbox" name="vflip" id="vflipCheck"> Bild vertikal spiegeln (V-Flip)
+        </label>
       </div>
 
       <div style="display:flex; align-items:center; gap:.6rem">
-        <button type="submit" class="btn btn-primary" style="flex:1">Apply</button>
-        <span id="settingsFeedback" style="font-size:.8rem; color:var(--green)"></span>
+        <button type="submit" class="btn btn-primary" style="flex:1">Speichern</button>
+        <span id="settingsFeedback" style="font-size:.78rem; color:var(--green)"></span>
       </div>
     </form>
+
+    <!-- IR LED control -->
+    <div style="border-top:1px solid var(--border); padding-top:.8rem; margin-top:.2rem">
+      <h2 style="border:none; margin-bottom:.6rem">IR Floodlight</h2>
+      <div style="display:flex; align-items:center; gap:.6rem">
+        <button class="btn btn-green" onclick="setRelay(true)">&#128161; ON</button>
+        <button class="btn btn-muted" onclick="setRelay(false)">OFF</button>
+        <span id="relayStatus" style="font-size:.82rem; color:var(--muted)"></span>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function logout() {
+  try { await fetch('/logout', { headers: { 'Authorization': 'Basic ' + btoa('logout:logout') } }); } catch {}
+  window.location.href = '/logout';
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 function toggleLensPos(val) {
   const row = document.getElementById('lensPosRow');
   row.style.opacity = val == '0' ? '1' : '0.4';
   row.querySelector('input[type=range]').disabled = val != '0';
+}
+
+function toggleNightVision(enabled) {
+  const awbSelect = document.getElementById('awbMode');
+  awbSelect.disabled = enabled;
+  awbSelect.closest('.field').style.opacity = enabled ? '0.4' : '1';
+}
+
+// Debounce helper — applies the setting after 400ms of no further changes
+let _applyTimer = null;
+function scheduleApply() {
+  clearTimeout(_applyTimer);
+  _applyTimer = setTimeout(applySettings, 400);
+}
+
+async function applySettings() {
+  const fd = new FormData(document.getElementById('settingsForm'));
+  const payload = Object.fromEntries(fd.entries());
+  ['af_mode','af_range','awb_mode','exposure_time'].forEach(k => { if (k in payload) payload[k] = parseInt(payload[k]); });
+  ['lens_position','contrast','saturation','analogue_gain'].forEach(k => { if (k in payload) payload[k] = parseFloat(payload[k]); });
+  payload.hdr = document.getElementById('hdrCheck').checked;
+  payload.night_vision = document.getElementById('nightVisionCheck').checked;
+  payload.hflip = document.getElementById('hflipCheck').checked;
+  payload.vflip = document.getElementById('vflipCheck').checked;
+  await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 }
 
 async function loadSettings() {
@@ -177,26 +323,31 @@ async function loadSettings() {
   if (cam.af_mode != null) { document.getElementById('afMode').value = cam.af_mode; toggleLensPos(cam.af_mode); }
   if (cam.af_range != null) document.getElementById('afRange').value = cam.af_range;
   if (cam.awb_mode != null) document.getElementById('awbMode').value = cam.awb_mode;
+  if (cam.night_vision != null) {
+    document.getElementById('nightVisionCheck').checked = !!cam.night_vision;
+    toggleNightVision(!!cam.night_vision);
+  }
   setRange('lens_position', cam.lens_position, 'lensVal');
   setRange('contrast', cam.contrast, 'contrastVal');
   setRange('saturation', cam.saturation, 'saturationVal');
   setRange('analogue_gain', cam.analogue_gain, 'gainVal');
   if (cam.exposure_time != null) document.getElementById('exposureTime').value = cam.exposure_time;
   if (cam.hdr != null) document.getElementById('hdrCheck').checked = cam.hdr;
-  setRange('pre_event_seconds', trap.pre_event_seconds, 'preVal');
-  setRange('post_event_seconds', trap.post_event_seconds, 'postVal');
+  if (cam.hflip != null) document.getElementById('hflipCheck').checked = cam.hflip;
+  if (cam.vflip != null) document.getElementById('vflipCheck').checked = cam.vflip;
 }
 
+// Attach live-apply listeners to every form control
+document.getElementById('settingsForm').addEventListener('input', scheduleApply);
+document.getElementById('settingsForm').addEventListener('change', scheduleApply);
+
+// Submit = explicit save (also applies immediately)
 document.getElementById('settingsForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const fd = new FormData(e.target);
-  const payload = Object.fromEntries(fd.entries());
-  ['af_mode','af_range','awb_mode','exposure_time','pre_event_seconds','post_event_seconds'].forEach(k => { if (k in payload) payload[k] = parseInt(payload[k]); });
-  ['lens_position','contrast','saturation','analogue_gain'].forEach(k => { if (k in payload) payload[k] = parseFloat(payload[k]); });
-  payload.hdr = payload.hdr === 'on';
-  const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  clearTimeout(_applyTimer);
+  await applySettings();
   const fb = document.getElementById('settingsFeedback');
-  fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
+  fb.textContent = '✓ Gespeichert';
   setTimeout(() => fb.textContent = '', 3000);
 });
 
@@ -214,12 +365,13 @@ function startStream() {
     placeholder.style.display = 'none';
     img.style.display = 'block';
     stateEl.textContent = '● LIVE';
-    stateEl.style.color = '#f85149';
+    stateEl.className = 'live';
     watchdogStart = Date.now();
     tickWatchdog();
   };
   img.onerror = () => {
-    stateEl.textContent = 'Stream error';
+    stateEl.textContent = 'Stream-Fehler';
+    stateEl.className = '';
     placeholder.style.display = 'block';
     img.style.display = 'none';
   };
@@ -243,6 +395,28 @@ async function stopStream() {
 }
 
 window.addEventListener('beforeunload', () => navigator.sendBeacon('/api/stream/stop'));
+
+// ── IR Relay ──────────────────────────────────────────────────────────────────
+async function setRelay(state) {
+  const r = await fetch('/api/relay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) });
+  const data = await r.json();
+  updateRelayStatus(data.relay);
+}
+
+function updateRelayStatus(on) {
+  const el = document.getElementById('relayStatus');
+  if (el) el.innerHTML = 'Aktuell: <strong>' + (on ? 'ON' : 'OFF') + '</strong>';
+}
+
+// Poll relay state alongside the stream watchdog
+setInterval(async () => {
+  try {
+    const r = await fetch('/api/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    updateRelayStatus(d.relay);
+  } catch {}
+}, 3000);
 
 loadSettings();
 startStream();

@@ -27,6 +27,8 @@ class StorageManager:
     def __init__(self, config: dict) -> None:
         self._apply_config(config)
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="nas-upload")
+        # Persistent upload status: filename -> "queued" | "uploaded" | "failed"
+        self._upload_status: dict[str, str] = {}
 
     def _apply_config(self, config: dict) -> None:
         storage = config.get("storage", {})
@@ -77,16 +79,16 @@ class StorageManager:
             logger.warning("Disk low: %.0f MB free (threshold %d MB)", free, self._min_free_mb)
 
         if self._nas_enabled:
+            self._upload_status[path.name] = "queued"
             self._executor.submit(self._upload_and_verify, path)
         else:
             logger.info("NAS disabled — keeping local: %s", file_path)
 
     def list_recordings(self) -> list[dict]:
-        """Return metadata for all local recordings, newest first."""
+        """Return metadata for all local MP4 recordings, newest first."""
         recordings = []
         for p in sorted(
-            list(self._recordings_path.glob("*.mp4")) +
-            list(self._recordings_path.glob("*.h264")),
+            self._recordings_path.glob("*.mp4"),
             key=lambda f: f.stat().st_mtime,
             reverse=True,
         ):
@@ -96,8 +98,39 @@ class StorageManager:
                 "size_mb": round(stat.st_size / (1024 * 1024), 2),
                 "mtime": stat.st_mtime,
                 "url": f"/recordings/{p.name}",
+                "upload_status": self._upload_status.get(p.name),
             })
         return recordings
+
+    def list_nas_recordings(self) -> list[dict]:
+        """Return list of MP4 files on the NAS share, newest first."""
+        if not self._nas_enabled or not self._nas_server or not self._nas_share:
+            return []
+        try:
+            import smbclient  # type: ignore
+            smbclient.register_session(
+                self._nas_server,
+                username=self._nas_user,
+                password=self._nas_password,
+                connection_timeout=5,
+            )
+            nas_remote = self._nas_remote_path.replace("/", "\\")
+            remote_dir = f"\\\\{self._nas_server}\\{self._nas_share}{nas_remote}"
+            entries = []
+            for entry in smbclient.scandir(remote_dir):
+                if not entry.name.lower().endswith(".mp4"):
+                    continue
+                stat = entry.stat()
+                entries.append({
+                    "filename": entry.name,
+                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                    "mtime": stat.st_mtime,
+                })
+            entries.sort(key=lambda e: e["mtime"], reverse=True)
+            return entries
+        except Exception:
+            logger.exception("Failed to list NAS recordings")
+            raise
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False)
@@ -111,6 +144,7 @@ class StorageManager:
         path = self._recordings_path / filename
         if not path.exists():
             return False
+        self._upload_status[filename] = "queued"
         self._executor.submit(self._upload_and_verify, path, False)
         return True
 
@@ -147,6 +181,7 @@ class StorageManager:
                     f"Size mismatch: local={local_size} remote={remote_size}"
                 )
 
+            self._upload_status[local_path.name] = "uploaded"
             if delete_local:
                 logger.info("NAS upload verified (%d bytes). Deleting local copy.", local_size)
                 local_path.unlink()
@@ -154,4 +189,5 @@ class StorageManager:
                 logger.info("NAS upload verified (%d bytes). Local copy retained.", local_size)
 
         except Exception:
+            self._upload_status[local_path.name] = "failed"
             logger.exception("NAS upload failed for %s — local file retained.", local_path.name)

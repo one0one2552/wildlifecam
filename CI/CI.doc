@@ -1,0 +1,51 @@
+O.W.L. – Corporate Identity & Design Guide
+Dieses Dokument dient als verbindliche Grundlage für das visuelle Erscheinungsbild und die Kommunikation der Marke O.W.L. – Open Work Lab. Ziel ist es, eine Identität zu schaffen, die technologische Exzellenz mit menschlicher Nahbarkeit und unkomplizierter Direktheit verbindet.
+1. Die Marken-DNA
+O.W.L. steht für die intelligente Verbindung von Hardware, Software und Mechanik. Der Name "Open Work Lab" signalisiert Transparenz, Flexibilität und eine lösungsorientierte Arbeitsweise.
+Kernwerte: Innovativ, unkompliziert, direkt, nahbar.
+Versprechen: Wir bauen Lösungen, die funktionieren – ohne unnötige Komplexität in der Kommunikation.
+2. Farbpalette
+Die Farben orientieren sich an der "Tech-Eule" und kombinieren professionelle Tiefe mit digitaler Energie.
+Kategorie
+Bezeichnung
+Hex-Code
+Anwendung
+Primärfarbe
+Deep Space Blue
+#0A2540
+Logos, Haupt-Texte, Header
+Akzentfarbe
+Electric Cyan
+#00E5FF
+Highlights, Icons, Hover-Effekte
+Hintergrund
+Soft Sky
+#F4F7FA
+Webseiten-Hintergrund, Karten
+Aktionsfarbe
+Active Cyan
+#00C2D1
+Buttons, Call-to-Action (CTA)
+
+3. Typografie
+Die Wahl der Schriftarten unterstützt den modernen und freundlichen Charakter der Marke.
+Überschriften (H1, H2, H3): Outfit
+Eine geometrische Sans-Serif, die modern und einladend wirkt. Sie bildet den visuellen Kontrast zur technischen Präzision.
+Fließtext: Inter
+Bietet maximale Lesbarkeit auf Bildschirmen und wirkt sachlich, aber direkt.
+Akzente/Code: JetBrains Mono
+Wird sparsam für technische Spezifikationen oder kleine Details verwendet, um die Ingenieurs-Expertise dezent zu unterstreichen.
+4. Tonalität (Tone of Voice)
+Die Sprache von O.W.L. ist die eines "smarten Werkstatt-Nachbarn".
+Direktheit: Wir sagen "Wir bauen die Lösung" statt "Wir implementieren eine systemübergreifende Strategie".
+Nahbarkeit: Keine Barrieren. Wir sprechen auf Augenhöhe mit Kunden, egal ob Tech-Experte oder Laie.
+Selbstbewusstsein: Wir wissen, was wir tun, müssen uns aber nicht hinter Fachbegriffen verstecken.
+5. Visuelle Richtlinien für das Webdesign
+Das Design sollte "atmungsaktiv" sein – viel Weißraum und klare Strukturen.
+Bildsprache
+Makro-Fokus: Ästhetische Nahaufnahmen von Hardware-Komponenten, Lötstellen oder mechanischen Getrieben mit geringer Tiefenschärfe.
+Menschlicher Faktor: Echte Interaktion zeigen (Hände am Werkstück, Skizzen am Whiteboard). Keine sterilen Business-Stockfotos.
+UI-Elemente
+Abgerundete Ecken: Verstärken den nahbaren Vibe (Radius ca. 8-12px).
+Dezente Schatten: Nutzen, um Tiefe zu erzeugen, ohne das Design zu überladen.
+Interaktive Eule: Das Logo-Icon kann bei Interaktion (z.B. Scrollen) dezent animiert werden (z.B. ein kurzes Aufleuchten der Augen).

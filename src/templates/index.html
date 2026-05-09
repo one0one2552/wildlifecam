@@ -1,65 +1,220 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wildlife Cam Pi 4 — Dashboard</title>
+<title>O.W.L. Wildlife Cam — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0d1117; --card: #161b22; --border: #30363d;
-    --accent: #58a6ff; --green: #3fb950; --red: #f85149;
-    --text: #e6edf3; --muted: #8b949e;
+    --bg: #F4F7FA;
+    --card: #FFFFFF;
+    --border: #D0DCE8;
+    --primary: #0A2540;
+    --accent: #00E5FF;
+    --cta: #00C2D1;
+    --cta-dark: #009CAB;
+    --text: #0A2540;
+    --muted: #526478;
+    --green: #1DB954;
+    --red: #E53935;
+    --shadow: 0 2px 12px rgba(10,37,64,.08);
+    --radius: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
-  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
-  header h1 { font-size: 1.2rem; }
-  .badge { padding: .25rem .6rem; border-radius: 9999px; font-size: .75rem; font-weight: 700; }
-  .badge-trap { background: #1f3a1f; color: var(--green); }
-  .badge-live { background: #3a1f1f; color: var(--red); }
-  .badge-recording { background: #3a2a1f; color: #e3b341; }
-  main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; display: grid; gap: 1.5rem; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: .75rem; padding: 1.5rem; }
-  .card h2 { font-size: 1rem; color: var(--muted); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: .05em; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-  label { display: block; font-size: .875rem; color: var(--muted); margin-bottom: .3rem; }
-  select, input[type=range], input[type=number] {
-    width: 100%; background: var(--bg); border: 1px solid var(--border);
-    color: var(--text); border-radius: .4rem; padding: .4rem .6rem; font-size: .9rem;
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+
+  /* ── Header ── */
+  header {
+    background: var(--primary);
+    padding: .75rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 16px rgba(10,37,64,.3);
+    position: sticky;
+    top: 0;
+    z-index: 100;
   }
-  input[type=range] { padding: 0; cursor: pointer; }
+  .logo-wrap { display: flex; align-items: center; gap: .75rem; }
+  .logo-img {
+    height: 44px;
+    width: auto;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: filter .35s ease;
+  }
+  .logo-img:hover, .logo-img.glow {
+    filter: drop-shadow(0 0 8px #00E5FF) drop-shadow(0 0 18px #00C2D1);
+  }
+  .logo-title {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: #fff;
+    letter-spacing: .02em;
+  }
+  .logo-title .dot { color: var(--accent); }
+  .logo-sub { font-weight: 400; font-size: .82rem; opacity: .65; }
+
+  /* ── Badges ── */
+  .badge {
+    padding: .25rem .7rem;
+    border-radius: 9999px;
+    font-size: .72rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: .05em;
+  }
+  .badge-trap     { background: rgba(0,194,209,.18); color: #00E5FF; border: 1px solid #00C2D1; }
+  .badge-live     { background: rgba(229,57,53,.18);  color: #FF6B6B; border: 1px solid var(--red); }
+  .badge-recording { background: rgba(255,183,0,.18); color: #FFB700; border: 1px solid #FFB700; }
+
+  /* ── Upload status badges ── */
+  .up-queued   { color: #FFB700; font-size: .72rem; font-family: 'JetBrains Mono', monospace; }
+  .up-uploaded { color: var(--green); font-size: .72rem; font-family: 'JetBrains Mono', monospace; }
+  .up-failed   { color: var(--red); font-size: .72rem; font-family: 'JetBrains Mono', monospace; }
+
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
+  .disk-info { color: rgba(255,255,255,.6); font-size: .8rem; font-family: 'JetBrains Mono', monospace; }
+  .disk-info .low { color: #FF6B6B; }
+
+  /* ── Multi-select toolbar ── */
+  #multiBar {
+    display: none;
+    align-items: center;
+    gap: .6rem;
+    padding: .6rem .75rem;
+    background: rgba(0,194,209,.08);
+    border: 1px solid var(--cta);
+    border-radius: var(--radius);
+    margin-bottom: .75rem;
+    flex-wrap: wrap;
+  }
+  #multiBar.visible { display: flex; }
+  .sel-count { font-size: .82rem; color: var(--muted); }
+
+  /* ── Layout ── */
+  main { max-width: 980px; margin: 2rem auto; padding: 0 1.25rem; display: grid; gap: 1.25rem; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+  }
+  .card h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    margin-bottom: 1.1rem;
+  }
+
+  /* ── Alert ── */
+  .alert {
+    background: #FFF8E1;
+    border: 1px solid #FFB700;
+    color: #7A5800;
+    padding: .7rem 1rem;
+    border-radius: var(--radius);
+    font-size: .875rem;
+  }
+
+  /* ── Grid helpers ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+  /* ── Form elements ── */
+  label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: .3rem; font-weight: 500; }
+  select, input[type=text], input[type=password], input[type=number] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: .45rem .65rem;
+    font-size: .875rem;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  select:focus, input[type=text]:focus, input[type=password]:focus, input[type=number]:focus {
+    border-color: var(--cta);
+    box-shadow: 0 0 0 3px rgba(0,194,209,.15);
+  }
+  input[type=range] { width: 100%; padding: 0; cursor: pointer; accent-color: var(--cta); }
   .range-row { display: flex; align-items: center; gap: .5rem; }
   .range-row input[type=range] { flex: 1; }
-  .range-val { min-width: 3rem; text-align: right; font-size: .875rem; color: var(--accent); }
-  .btn { padding: .5rem 1.2rem; border-radius: .4rem; border: none; cursor: pointer; font-weight: 600; font-size: .875rem; transition: opacity .15s; }
-  .btn:hover { opacity: .8; }
-  .btn-primary { background: var(--accent); color: #000; }
-  .btn-danger  { background: var(--red);    color: #fff; }
-  .btn-green   { background: var(--green);  color: #000; }
-  .btn-muted   { background: var(--border); color: var(--text); }
-  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: .4rem 0; border-bottom: 1px solid var(--border); }
+  .range-val { min-width: 3rem; text-align: right; font-size: .82rem; color: var(--cta); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: .5rem 1.25rem;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: .875rem;
+    font-family: 'Inter', sans-serif;
+    transition: opacity .15s, box-shadow .15s;
+  }
+  .btn:hover { opacity: .87; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+  .btn-primary { background: var(--cta);   color: #fff; }
+  .btn-danger  { background: var(--red);   color: #fff; }
+  .btn-green   { background: var(--green); color: #fff; }
+  .btn-muted   { background: var(--bg);    color: var(--text); border: 1px solid var(--border); }
+
+  /* ── Stat rows ── */
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: .55rem 0; border-bottom: 1px solid var(--border); }
   .stat-row:last-child { border-bottom: none; }
-  .alert { background: #2d1a00; border: 1px solid #e3b341; color: #e3b341; padding: .6rem 1rem; border-radius: .4rem; margin-bottom: 1rem; font-size: .875rem; }
-  footer { text-align: center; color: var(--muted); font-size: .75rem; padding: 2rem; }
+
+  /* ── Footer ── */
+  footer { text-align: center; color: var(--muted); font-size: .75rem; padding: 2.5rem 1rem; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Mobile header ── */
+  @media (max-width: 640px) {
+    header {
+      padding: .5rem .75rem;
+      gap: .4rem;
+      flex-wrap: wrap;
+    }
+    .logo-sub { display: none; }
+    .disk-info { display: none; }
+    .header-right { margin-left: 0; gap: .4rem; }
+    .logo-img { height: 36px; }
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🦉 Wildlife Cam Pi 4</h1>
+  <div class="logo-wrap">
+    <img src="/static/logo.jpg" alt="O.W.L. Logo" class="logo-img" id="owlLogo">
+    <span class="logo-title">O<span class="dot">·</span>W<span class="dot">·</span>L <span class="logo-sub">Wildlife Cam</span></span>
+  </div>
   <span id="stateBadge" class="badge badge-{{ state.lower() }}">{{ state }}</span>
-  <span style="margin-left:auto; color:var(--muted); font-size:.85rem;" id="freeDisk">
-    💾 {{ free_mb | int }} MB free
-    {% if storage_low %}<span style="color:var(--red)"> ⚠ LOW</span>{% endif %}
-  </span>
-  <a href="/stream" class="btn btn-danger" style="text-decoration:none">▶ Live Stream</a>
+  <span id="pirBadge" class="badge" style="background:var(--muted); font-size:.75rem">PIR: –</span>
+  <div class="header-right">
+    <span class="disk-info" id="freeDisk">
+      {{ free_mb | int }} MB free
+      {% if storage_low %}<span class="low"> ⚠ LOW</span>{% endif %}
+    </span>
+    <a href="/stream" class="btn btn-danger" style="text-decoration:none">▶ Live Stream</a>
+    <a href="/settings" class="btn btn-muted" style="text-decoration:none">⚙ Einstellungen</a>
+    <button class="btn btn-muted" style="font-size:.8rem; padding:.35rem .8rem" onclick="logout()">⏻ Logout</button>
+  </div>
 </header>
 
 <main>
 
 {% if storage_low %}
-<div class="alert">⚠ Storage low: {{ free_mb | int }} MB remaining. Consider enabling NAS upload or clearing old recordings.</div>
+<div class="alert">⚠ Speicher niedrig: {{ free_mb | int }} MB verbleibend. Bitte NAS-Upload aktivieren oder alte Aufnahmen löschen.</div>
 {% endif %}
 
 <!-- Manual Trigger -->
@@ -79,58 +234,38 @@
     <button class="btn btn-green" onclick="setRelay(true)">💡 ON</button>
     <button class="btn btn-muted" onclick="setRelay(false)">OFF</button>
     <span id="relayStatus" style="color:var(--muted); font-size:.9rem">
-      Currently: <strong>{{ 'ON' if relay_state else 'OFF' }}</strong>
+      Aktuell: <strong>{{ 'ON' if relay_state else 'OFF' }}</strong>
     </span>
   </div>
 </div>
 
-<!-- NAS / Samba Settings -->
-<div class="card">
-  <h2>NAS / Samba</h2>
-  <form id="nasForm">
-    <div style="margin-bottom:.9rem">
-      <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.9rem">
-        <input type="checkbox" name="nas_enabled" id="nasEnabled" {% if nas_cfg.enabled %}checked{% endif %}>
-        NAS Upload aktiviert
-      </label>
-    </div>
-    <div class="grid-2">
-      <div>
-        <label>Server (IP / Hostname)</label>
-        <input type="text" name="nas_server" id="nasServer" value="{{ nas_cfg.server }}" placeholder="192.168.1.100"
-               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
-      </div>
-      <div>
-        <label>Share-Name</label>
-        <input type="text" name="nas_share" id="nasShare" value="{{ nas_cfg.share }}" placeholder="wildlife"
-               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
-      </div>
-      <div>
-        <label>Remote-Pfad</label>
-        <input type="text" name="nas_remote_path" id="nasRemotePath" value="{{ nas_cfg.remote_path }}" placeholder="/"
-               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
-      </div>
-      <div>
-        <label>Benutzername</label>
-        <input type="text" name="nas_username" id="nasUsername" value="{{ nas_cfg.username }}" placeholder="pi"
-               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
-      </div>
-      <div style="grid-column: span 2">
-        <label>Passwort</label>
-        <input type="password" name="nas_password" placeholder="(leer lassen um nicht zu ändern)"
-               style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:.4rem; padding:.4rem .6rem; font-size:.9rem;">
-      </div>
-    </div>
-    <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center">
-      <button type="submit" class="btn btn-primary">Speichern</button>
-      <span id="nasFeedback" style="color:var(--green); font-size:.85rem"></span>
-    </div>
-  </form>
+<!-- NAS → moved to /settings -->
+<div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.8rem">
+  <div>
+    <h2>NAS / Samba &amp; weitere Einstellungen</h2>
+    <p style="font-size:.85rem; color:var(--muted)">NAS-Upload, WLAN-Konfiguration und Anwendungslogs</p>
+  </div>
+  <a href="/settings" class="btn btn-primary" style="text-decoration:none">⚙ Zu den Einstellungen</a>
 </div>
 
 <!-- Recordings -->
 <div class="card">
-  <h2>Aufnahmen</h2>
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:.6rem">
+    <h2 style="margin:0">Aufnahmen</h2>
+    <div style="display:flex; gap:.4rem">
+      <button id="srcLocal" class="btn btn-primary" style="font-size:.75rem; padding:.25rem .7rem" onclick="setRecSource('local')">&#x1f4be; Lokal</button>
+      <button id="srcNas" class="btn btn-muted" style="font-size:.75rem; padding:.25rem .7rem" onclick="setRecSource('nas')">&#x2601; NAS</button>
+    </div>
+  </div>
+  <!-- Multi-select toolbar -->
+  <div id="multiBar">
+    <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" title="Alle auswählen">
+    <span class="sel-count" id="selCount">0 ausgewählt</span>
+    <button class="btn btn-danger" style="font-size:.75rem; padding:.25rem .7rem" onclick="deleteSelected()">🗑 Ausgewählte löschen</button>
+    <button class="btn btn-muted" style="font-size:.75rem; padding:.25rem .7rem" onclick="downloadSelected()">⬇ Herunterladen (ZIP)</button>
+    <button class="btn btn-muted" style="font-size:.75rem; padding:.25rem .7rem" onclick="uploadSelected()">☁ NAS-Upload</button>
+    <button class="btn btn-muted" style="font-size:.75rem; padding:.25rem .7rem; margin-left:auto" onclick="clearSelection()">✕ Auswahl aufheben</button>
+  </div>
   <div id="recordingList"><em style="color:var(--muted)">Lade…</em></div>
   <!-- Inline video player -->
   <div id="playerWrap" style="display:none; margin-top:1rem">
@@ -138,33 +273,31 @@
       <span id="playerTitle" style="font-size:.85rem; color:var(--muted)"></span>
       <button class="btn btn-muted" onclick="closePlayer()" style="font-size:.75rem; padding:.2rem .6rem">✕ Schließen</button>
     </div>
-    <video id="videoPlayer" controls style="width:100%; border-radius:.5rem; background:#000; max-height:400px">
+    <video id="videoPlayer" controls style="width:100%; border-radius:var(--radius); background:#000; max-height:400px">
       Ihr Browser unterstützt kein HTML5-Video.
     </video>
   </div>
 </div>
 
 </main>
-<footer>Wildlife Cam Pi 4 &mdash; IMX708 Wide NoIR</footer>
+<footer>O·W·L Open Work Lab &mdash; Wildlife Cam Pi 4 &mdash; IMX708 Wide NoIR</footer>
 
 <script>
-// ── NAS Settings ──────────────────────────────────────────────────────────────
-document.getElementById('nasForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const payload = {
-    nas_enabled: fd.get('nas_enabled') === 'on',
-    nas_server: fd.get('nas_server'),
-    nas_share: fd.get('nas_share'),
-    nas_remote_path: fd.get('nas_remote_path'),
-    nas_username: fd.get('nas_username'),
-  };
-  const pw = fd.get('nas_password');
-  if (pw) payload.nas_password = pw;
-  const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  document.getElementById('nasFeedback').textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
-  setTimeout(() => document.getElementById('nasFeedback').textContent = '', 3000);
-});
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function logout() {
+  // Send a request with invalid credentials to clear the browser's cached Basic Auth
+  try { await fetch('/logout', { headers: { 'Authorization': 'Basic ' + btoa('logout:logout') } }); } catch {}
+  window.location.href = '/logout';
+}
+
+// ── Logo glow on scroll ───────────────────────────────────────────────────────
+const owlLogo = document.getElementById('owlLogo');
+let _glowTimer;
+window.addEventListener('scroll', () => {
+  owlLogo.classList.add('glow');
+  clearTimeout(_glowTimer);
+  _glowTimer = setTimeout(() => owlLogo.classList.remove('glow'), 600);
+}, { passive: true });
 
 // ── Trigger ───────────────────────────────────────────────────────────────────
 async function manualTrigger() {
@@ -195,27 +328,100 @@ async function setRelay(state) {
 }
 
 // ── Recordings ────────────────────────────────────────────────────────────────
+const UPLOAD_STATUS_LABEL = {
+  queued:   '<span class="up-queued">⏳ queued</span>',
+  uploaded: '<span class="up-uploaded">✓ uploaded</span>',
+  failed:   '<span class="up-failed">✗ failed</span>',
+};
+
+let _recSource = 'local'; // 'local' or 'nas'
+function setRecSource(src) {
+  _recSource = src;
+  document.getElementById('srcLocal').className = 'btn ' + (src === 'local' ? 'btn-primary' : 'btn-muted');
+  document.getElementById('srcNas').className   = 'btn ' + (src === 'nas'   ? 'btn-primary' : 'btn-muted');
+  document.getElementById('multiBar').style.display = src === 'nas' ? 'none' : '';
+  loadRecordings();
+}
+
 async function loadRecordings() {
+  if (_recSource === 'nas') { await loadNasRecordings(); return; }
   const r = await fetch('/api/recordings');
   const items = await r.json();
   const el = document.getElementById('recordingList');
-  if (!items.length) { el.innerHTML = '<em style="color:var(--muted)">Noch keine Aufnahmen.</em>'; return; }
-  el.innerHTML = items.map(i => `
-    <div class="stat-row">
+  if (!items.length) {
+    el.innerHTML = '<em style="color:var(--muted)">Noch keine Aufnahmen.</em>';
+    updateMultiBar();
+    return;
+  }
+  el.innerHTML = items.map(i => {
+    const statusHtml = i.upload_status ? UPLOAD_STATUS_LABEL[i.upload_status] || '' : '';
+    const uploadBtnLabel = i.upload_status === 'queued' ? '⏳ Queued'
+                         : i.upload_status === 'uploaded' ? '✓ Uploaded'
+                         : '☁ Upload';
+    const uploadBtnDisabled = (i.upload_status === 'queued' || i.upload_status === 'uploaded') ? 'disabled' : '';
+    const uploadBtnColor = i.upload_status === 'uploaded' ? 'color:var(--green)' : '';
+    return `
+    <div class="stat-row" data-filename="${i.filename}">
+      <input type="checkbox" class="rec-check" style="margin-right:.6rem; flex-shrink:0" onchange="updateMultiBar()">
       <div style="font-size:.85rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:.5rem">
-        ${i.filename}<br><span style="color:var(--muted); font-size:.75rem">${i.size_mb} MB</span>
+        ${i.filename}<br>
+        <span style="color:var(--muted); font-size:.75rem">${i.size_mb} MB</span>
+        ${statusHtml ? `&ensp;${statusHtml}` : ''}
       </div>
       <span style="display:flex; gap:.4rem; align-items:center; flex-shrink:0; flex-wrap:wrap">
         <button class="btn btn-muted" style="font-size:.75rem; padding:.2rem .5rem"
           onclick="playRecording('${i.url}','${i.filename}')">▶ Play</button>
         <a class="btn btn-muted" style="font-size:.75rem; padding:.2rem .5rem; text-decoration:none"
           href="${i.url}" download="${i.filename}">⬇ Download</a>
-        <button class="btn btn-muted" style="font-size:.75rem; padding:.2rem .5rem"
-          onclick="uploadRecording('${i.filename}', this)">☁ Upload</button>
+        <button class="btn btn-muted" style="font-size:.75rem; padding:.2rem .5rem; ${uploadBtnColor}" ${uploadBtnDisabled}
+          onclick="uploadRecording('${i.filename}', this)">${uploadBtnLabel}</button>
         <button class="btn btn-danger" style="font-size:.75rem; padding:.2rem .5rem"
           onclick="deleteRecording('${i.filename}', this.closest('.stat-row'))">🗑 Löschen</button>
       </span>
+    </div>`;
+  }).join('');
+  updateMultiBar();
+}
+
+async function loadNasRecordings() {
+  const el = document.getElementById('recordingList');
+  el.innerHTML = '<em style="color:var(--muted)">Lade NAS…</em>';
+  const r = await fetch('/api/recordings/nas');
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    el.innerHTML = '<em style="color:var(--red)">✗ NAS-Fehler: ' + (data.error || r.status) + '</em>';
+    return;
+  }
+  const items = await r.json();
+  if (!items.length) {
+    el.innerHTML = '<em style="color:var(--muted)">Keine Aufnahmen auf dem NAS.</em>';
+    return;
+  }
+  el.innerHTML = items.map(i => `
+    <div class="stat-row" data-filename="${i.filename}">
+      <div style="font-size:.85rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:.5rem">
+        ${i.filename}<br>
+        <span style="color:var(--muted); font-size:.75rem">${i.size_mb} MB</span>
+      </div>
+      <span style="display:flex; gap:.4rem; align-items:center; flex-shrink:0">
+        <button class="btn btn-muted" style="font-size:.75rem; padding:.2rem .5rem"
+          onclick="playRecording('/nas-recordings/${encodeURIComponent(i.filename)}','${i.filename}')">▶ Play</button>
+        <button class="btn btn-danger" style="font-size:.75rem; padding:.2rem .5rem"
+          onclick="deleteNasRecording('${i.filename}', this.closest('.stat-row'))">🗑 Löschen</button>
+      </span>
     </div>`).join('');
+}
+
+async function deleteNasRecording(filename, row) {
+  if (!confirm(`"${filename}" vom NAS wirklich löschen?`)) return;
+  const r = await fetch(`/api/recordings/nas/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+  if (r.ok) {
+    row.remove();
+    if (document.getElementById('playerTitle').textContent === filename) closePlayer();
+  } else {
+    const data = await r.json().catch(() => ({}));
+    alert('Fehler: ' + (data.reason || 'Unbekannt'));
+  }
 }
 
 function playRecording(url, name) {
@@ -240,11 +446,18 @@ async function uploadRecording(filename, btn) {
   const r = await fetch(`/api/recordings/${encodeURIComponent(filename)}/upload`, { method: 'POST' });
   const data = await r.json().catch(() => ({}));
   if (r.ok) {
-    btn.textContent = '✓ Queued';
+    btn.textContent = '⏳ Queued';
     btn.style.color = 'var(--green)';
+    // reflect in status label
+    const row = btn.closest('.stat-row');
+    if (row) {
+      const info = row.querySelector('div > span:last-child') || row.querySelector('.up-queued, .up-uploaded, .up-failed');
+      // reload to get fresh server-side status
+    }
   } else {
-    btn.textContent = '✗ ' + (data.reason || 'Fehler');
+    btn.textContent = '☁ Upload';
     btn.disabled = false;
+    alert('Upload-Fehler: ' + (data.reason || 'Unbekannt'));
   }
 }
 
@@ -254,23 +467,123 @@ async function deleteRecording(filename, row) {
   if (r.ok) {
     row.remove();
     if (document.getElementById('playerTitle').textContent === filename) closePlayer();
+    updateMultiBar();
   } else {
     const data = await r.json().catch(() => ({}));
     alert('Fehler: ' + (data.reason || 'Unbekannt'));
   }
 }
 
+// ── Multi-select ──────────────────────────────────────────────────────────────
+function getCheckedFilenames() {
+  return [...document.querySelectorAll('.rec-check:checked')]
+    .map(cb => cb.closest('.stat-row').dataset.filename);
+}
+
+function updateMultiBar() {
+  const checked = document.querySelectorAll('.rec-check:checked');
+  const bar = document.getElementById('multiBar');
+  bar.classList.toggle('visible', checked.length > 0);
+  document.getElementById('selCount').textContent = checked.length + ' ausgewählt';
+  const all = document.querySelectorAll('.rec-check');
+  document.getElementById('selectAll').checked = all.length > 0 && checked.length === all.length;
+  document.getElementById('selectAll').indeterminate = checked.length > 0 && checked.length < all.length;
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.rec-check').forEach(cb => cb.checked = checked);
+  updateMultiBar();
+}
+
+function clearSelection() {
+  document.querySelectorAll('.rec-check').forEach(cb => cb.checked = false);
+  updateMultiBar();
+}
+
+async function deleteSelected() {
+  const filenames = getCheckedFilenames();
+  if (!filenames.length) return;
+  if (!confirm(`${filenames.length} Aufnahme(n) wirklich löschen?`)) return;
+  const r = await fetch('/api/recordings', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filenames }),
+  });
+  const data = await r.json().catch(() => ({}));
+  data.deleted?.forEach(fn => {
+    const row = document.querySelector(`[data-filename="${CSS.escape(fn)}"]`);
+    if (row) {
+      if (document.getElementById('playerTitle').textContent === fn) closePlayer();
+      row.remove();
+    }
+  });
+  updateMultiBar();
+  if (data.errors?.length) alert('Fehler bei: ' + data.errors.join(', '));
+}
+
+async function downloadSelected() {
+  const filenames = getCheckedFilenames();
+  if (!filenames.length) return;
+  const r = await fetch('/api/recordings/zip', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filenames }),
+  });
+  if (!r.ok) { alert('ZIP-Fehler'); return; }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'recordings.zip';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+async function uploadSelected() {
+  const filenames = getCheckedFilenames();
+  if (!filenames.length) return;
+  const r = await fetch('/api/recordings/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filenames }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { alert('Fehler: ' + (data.reason || 'NAS nicht aktiviert')); return; }
+  alert(`${data.queued?.length || 0} Datei(en) in die Upload-Warteschlange gestellt.`);
+  loadRecordings();
+}
+
 loadRecordings();
 
 // ── Status Poll ───────────────────────────────────────────────────────────────
+let _lastRecMtime = 0;
 async function pollStatus() {
   const r = await fetch('/api/status');
   const d = await r.json();
   const badge = document.getElementById('stateBadge');
   badge.textContent = d.state;
   badge.className = 'badge badge-' + d.state.toLowerCase();
-  document.getElementById('freeDisk').innerHTML = '💾 ' + Math.round(d.free_mb) + ' MB free' + (d.storage_low ? ' <span style="color:var(--red)">⚠ LOW</span>' : '');
+
+  let diskHtml = Math.round(d.free_mb) + ' MB free';
+  if (d.storage_low) diskHtml += ' <span class="low">⚠ LOW</span>';
+  if (d.cpu_temp != null) diskHtml += ' &nbsp;|&nbsp; ' + d.cpu_temp + '°C';
+  if (d.under_voltage) diskHtml += ' &nbsp;|&nbsp; <span style="color:var(--red)" title="Unterspannung seit letztem Start erkannt">⚡ Unterspannung</span>';
+  document.getElementById('freeDisk').innerHTML = diskHtml;
+
+  const pirBadge = document.getElementById('pirBadge');
+  if (d.pir != null) {
+    pirBadge.textContent = d.pir ? 'PIR: ● Bewegung' : 'PIR: ○ Ruhig';
+    pirBadge.style.background = d.pir ? 'var(--red)' : 'var(--muted)';
+  }
+
+  if (d.rec_latest_mtime !== _lastRecMtime) {
+    _lastRecMtime = d.rec_latest_mtime;
+    loadRecordings();
+  }
 }
+pollStatus();
 setInterval(pollStatus, 5000);
 </script>
 

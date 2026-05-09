@@ -75,6 +75,9 @@ def main() -> None:
     from gpio_manager import GPIOManager
     gpio_mgr = GPIOManager(config, on_motion=cam_mgr.trigger_recording)
 
+    # Auto-control IR LED relay during PIR-triggered recordings
+    cam_mgr._relay_callback = gpio_mgr.set_relay
+
     # Flask app
     from web_server import create_app
     server_cfg = config.get("server", {})

@@ -1,13 +1,16 @@
 camera:
   af_mode: 2
   af_range: 0
-  analogue_gain: 1.0
-  awb_mode: 7
-  contrast: 1.0
+  analogue_gain: 0.0
+  awb_mode: 1
+  contrast: 1.5
   exposure_time: 0
-  hdr: false
-  lens_position: 1.0
-  saturation: 1.0
+  hdr: true
+  hflip: true
+  lens_position: 12.0
+  night_vision: true
+  saturation: 0.6
+  vflip: true
 live:
   framerate: 15
   jpeg_quality: 85
@@ -23,24 +26,32 @@ relay:
   gpio_pin: 18
 server:
   host: 0.0.0.0
-  password_hash: $2b$12$NW0VBcuNOQFp.Bl7F55ELuN2iWBoVdsbdS05X5aoOveCuzbXmVcuC
   port: 8080
-  username: admin
+  users:
+  - password_hash: $2b$12$NW0VBcuNOQFp.Bl7F55ELuN2iWBoVdsbdS05X5aoOveCuzbXmVcuC
+    role: admin
+    username: admin
+  - password_hash: $2b$12$6o/f6zQJNSBE3bKmRGbKNO7e5cNDiuftbNmQUn5HfA3rjAMajXKIi
+    role: user
+    username: Claudi
+  - password_hash: $2b$12$/He.kegMY8n0qbx3Vhw3Kuiuq0Enhu0ynONAd6SD/Glr9j.tkPWqG
+    role: admin
+    username: Stefan
 storage:
   halt_free_mb: 100
   min_free_mb: 500
   nas:
-    enabled: false
-    password: ''
-    remote_path: /
-    server: 192.168.1.100
-    share: wildlife
-    username: pi
+    enabled: true
+    password: '101101'
+    remote_path: /wildlife/
+    server: 192.168.10.99
+    share: JDownloads
+    username: root
   recordings_path: /recordings
 trap:
   framerate: 30
-  post_event_seconds: 10
-  pre_event_seconds: 3
+  post_event_seconds: 9
+  pre_event_seconds: 1
   resolution:
   - 1920
   - 1080
