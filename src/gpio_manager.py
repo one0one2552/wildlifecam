@@ -27,6 +27,17 @@ class GPIOManager:
       - Relay / floodlight on GPIO 18 (output, active-high)
 
     PIR polling runs in a background daemon thread.
+
+    Trigger logic
+    -------------
+    A motion event is forwarded to *on_motion* only when ALL of these
+    conditions are met:
+
+    1. The PIR signal stays HIGH for at least *min_pulse_ms* milliseconds
+       (filters out short electrical glitches).
+    2. Within the last *pulse_window_s* seconds, at least *pulse_count*
+       qualifying pulses have been detected.
+    3. The trap is enabled (``trap_enabled == True``).
     """
 
     def __init__(self, config: dict, on_motion: Optional[Callable] = None) -> None:
@@ -38,13 +49,21 @@ class GPIOManager:
         self._relay_pin: int = relay_cfg.get("gpio_pin", 18)
         self._relay_active_high: bool = relay_cfg.get("active_high", True)
 
+        # Pulse / trigger settings (hot-reloadable via update_config)
+        self._min_pulse_ms: float = float(pir_cfg.get("min_pulse_ms", 100))
+        self._pulse_count: int = max(1, int(pir_cfg.get("pulse_count", 1)))
+        self._pulse_window_s: float = float(pir_cfg.get("pulse_window_s", 5.0))
+
         self._on_motion = on_motion
         self._relay_state = False
+        self._trap_enabled: bool = bool(config.get("trap", {}).get("enabled", True))
         self._stop_event = threading.Event()
         self._pir_thread: Optional[threading.Thread] = None
         self._handle: Optional[int] = None
         self._last_trigger_ts: float = 0.0
         self._lock = threading.Lock()
+        # Timestamps of qualifying pulses within the current window
+        self._pulse_times: list = []
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -99,6 +118,24 @@ class GPIOManager:
             return False
         return bool(lgpio.gpio_read(self._handle, self._pir_pin))
 
+    def set_trap_enabled(self, enabled: bool) -> None:
+        """Enable or disable the trap (PIR → recording trigger)."""
+        with self._lock:
+            self._trap_enabled = bool(enabled)
+        logger.info("Trap %s", "enabled" if enabled else "disabled")
+
+    def get_trap_enabled(self) -> bool:
+        return self._trap_enabled
+
+    def update_config(self, config: dict) -> None:
+        """Hot-reload PIR trigger settings from the current config."""
+        pir_cfg = config.get("pir", {})
+        with self._lock:
+            self._min_pulse_ms = float(pir_cfg.get("min_pulse_ms", 100))
+            self._pulse_count = max(1, int(pir_cfg.get("pulse_count", 1)))
+            self._pulse_window_s = float(pir_cfg.get("pulse_window_s", 5.0))
+            self._trap_enabled = bool(config.get("trap", {}).get("enabled", True))
+
     # ------------------------------------------------------------------ #
     # Internal                                                             #
     # ------------------------------------------------------------------ #
@@ -112,25 +149,82 @@ class GPIOManager:
         logger.debug("Relay → %s", "ON" if state else "OFF")
 
     def _pir_poll_loop(self) -> None:
-        """Poll PIR pin in a tight loop; invoke callback on rising edge."""
+        """Poll PIR pin in a tight loop; invoke callback on rising edge.
+
+        A valid trigger requires:
+          1. The pulse is HIGH for at least *_min_pulse_ms* ms.
+          2. The debounce window (*_PIR_DEBOUNCE_MS*) has elapsed since the
+             last recorded pulse.
+          3. At least *_pulse_count* qualifying pulses have occurred within
+             *_pulse_window_s* seconds (the current pulse counts as one).
+          4. The trap is enabled.
+        """
         last_val = 0
+        pulse_start: float = 0.0
+        in_pulse: bool = False
+
         while not self._stop_event.is_set():
             try:
                 if self._handle is None:
                     break
                 val = lgpio.gpio_read(self._handle, self._pir_pin)
+                now = time.monotonic()
+
                 if val == 1 and last_val == 0:
-                    # Rising edge — apply debounce
-                    now = time.monotonic()
-                    elapsed = now - self._last_trigger_ts
-                    if elapsed * 1000 >= _PIR_DEBOUNCE_MS:
-                        self._last_trigger_ts = now
-                        logger.info("PIR motion detected on GPIO%d", self._pir_pin)
-                        if self._on_motion:
-                            try:
-                                self._on_motion()
-                            except Exception:
-                                logger.exception("on_motion callback raised")
+                    # Rising edge — start measuring pulse duration
+                    in_pulse = True
+                    pulse_start = now
+
+                elif val == 0 and last_val == 1 and in_pulse:
+                    # Falling edge — evaluate the completed pulse
+                    in_pulse = False
+                    pulse_duration_ms = (now - pulse_start) * 1000.0
+
+                    with self._lock:
+                        min_ms = self._min_pulse_ms
+                        debounce_ms = _PIR_DEBOUNCE_MS
+                        pulse_count_needed = self._pulse_count
+                        pulse_window = self._pulse_window_s
+                        trap_on = self._trap_enabled
+
+                    if pulse_duration_ms < min_ms:
+                        logger.debug(
+                            "PIR pulse too short (%.0f ms < %.0f ms), ignored",
+                            pulse_duration_ms, min_ms,
+                        )
+                    else:
+                        elapsed_since_last = (now - self._last_trigger_ts) * 1000
+                        if elapsed_since_last < debounce_ms:
+                            logger.debug("PIR debounced (%.0f ms)", elapsed_since_last)
+                        else:
+                            # Record this qualifying pulse
+                            self._last_trigger_ts = now
+                            cutoff = now - pulse_window
+                            self._pulse_times = [
+                                t for t in self._pulse_times if t > cutoff
+                            ]
+                            self._pulse_times.append(now)
+                            count = len(self._pulse_times)
+
+                            logger.debug(
+                                "PIR qualifying pulse (%.0f ms), %d/%d in %.1fs window",
+                                pulse_duration_ms, count, pulse_count_needed, pulse_window,
+                            )
+
+                            if count >= pulse_count_needed:
+                                self._pulse_times.clear()
+                                logger.info(
+                                    "PIR trigger: %d pulse(s) within %.1fs on GPIO%d",
+                                    count, pulse_window, self._pir_pin,
+                                )
+                                if trap_on and self._on_motion:
+                                    try:
+                                        self._on_motion()
+                                    except Exception:
+                                        logger.exception("on_motion callback raised")
+                                elif not trap_on:
+                                    logger.debug("PIR trigger suppressed — trap disabled")
+
                 last_val = val
             except Exception:
                 logger.exception("PIR poll error")

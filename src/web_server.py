@@ -364,9 +364,16 @@ def create_app(
     @require_auth
     def api_settings_get():
         nas = _cfg.get("storage", {}).get("nas", {})
+        pir_cfg = _cfg.get("pir", {})
         return jsonify({
             "camera": _cfg.get("camera", {}),
             "trap": _cfg.get("trap", {}),
+            "pir": {
+                "min_pulse_ms": pir_cfg.get("min_pulse_ms", 100),
+                "pulse_count": pir_cfg.get("pulse_count", 1),
+                "pulse_window_s": pir_cfg.get("pulse_window_s", 5.0),
+            },
+            "trap_enabled": gpio_manager.get_trap_enabled(),
             "nas": {
                 "enabled": nas.get("enabled", False),
                 "server": nas.get("server", ""),
@@ -615,6 +622,22 @@ def create_app(
         camera_manager.trigger_recording()
         return jsonify({"ok": True})
 
+    @app.get("/api/trap/enabled")
+    @require_auth
+    def api_trap_enabled_get():
+        return jsonify({"enabled": gpio_manager.get_trap_enabled()})
+
+    @app.post("/api/trap/enabled")
+    @require_auth
+    def api_trap_enabled_set():
+        data = request.get_json(force=True, silent=True) or {}
+        enabled = bool(data.get("enabled", True))
+        gpio_manager.set_trap_enabled(enabled)
+        # Persist to config
+        _cfg.setdefault("trap", {})["enabled"] = enabled
+        _save_config(_cfg, config_path)
+        return jsonify({"enabled": enabled})
+
     @app.post("/api/relay")
     @require_auth
     def api_relay():
@@ -759,6 +782,21 @@ def create_app(
         if changed_trap:
             camera_manager.update_config(_cfg)
 
+        # ── PIR trigger settings ──────────────────────────────────────────
+        pir = _cfg.setdefault("pir", {})
+        changed_pir = False
+        if "min_pulse_ms" in data:
+            pir["min_pulse_ms"] = max(0.0, min(5000.0, float(data["min_pulse_ms"])))
+            changed_pir = True
+        if "pulse_count" in data:
+            pir["pulse_count"] = max(1, min(20, int(data["pulse_count"])))
+            changed_pir = True
+        if "pulse_window_s" in data:
+            pir["pulse_window_s"] = max(1.0, min(300.0, float(data["pulse_window_s"])))
+            changed_pir = True
+        if changed_pir:
+            gpio_manager.update_config(_cfg)
+
         # ── NAS settings ─────────────────────────────────────────────────
         nas = _cfg.setdefault("storage", {}).setdefault("nas", {})
         changed_nas = False
@@ -787,15 +825,26 @@ def create_app(
         # These are passed to Picamera2.set_controls() and take effect on
         # the next frame without restarting the camera.
         int_fields = {
-            "af_mode":  (0, 2),   # 0=Manual, 1=Auto, 2=Continuous
-            "af_range": (0, 2),   # 0=Normal, 1=Macro, 2=Full
-            "awb_mode": (0, 7),   # 0=Auto … 6=Cloudy, 7=Custom
+            "af_mode":              (0, 2),    # 0=Manual, 1=Auto, 2=Continuous
+            "af_range":             (0, 2),    # 0=Normal, 1=Macro, 2=Full
+            "af_speed":             (0, 1),    # 0=Normal, 1=Fast
+            "awb_mode":             (0, 7),    # 0=Auto … 6=Cloudy, 7=Custom
+            "noise_reduction_mode": (0, 2),    # 0=Off, 1=Fast, 2=HighQuality
+            "ae_metering_mode":     (0, 3),    # 0=CentreWeighted…3=Custom
+            "ae_exposure_mode":     (0, 3),    # 0=Normal…3=Custom
+            "ae_constraint_mode":   (0, 3),    # 0=Normal…3=Custom
+            "flicker_avoidance_hz": (0, 120),  # 0=Off,50,60,100,120 Hz
         }
         float_fields = {
-            "contrast":       (0.0, 32.0),
-            "saturation":     (0.0, 32.0),
-            "analogue_gain":  (0.0, 16.0),  # 0 = auto (AeEnable handles it)
-            "lens_position":  (0.0, 32.0),  # diopters — manual AF only
+            "contrast":         (0.0, 32.0),
+            "saturation":       (0.0, 32.0),
+            "sharpness":        (0.0, 16.0),
+            "brightness":       (-1.0, 1.0),
+            "analogue_gain":    (0.0, 16.0),   # 0 = auto
+            "lens_position":    (0.0, 32.0),   # diopters — manual AF only
+            "exposure_value":   (-8.0, 8.0),   # EV compensation
+            "colour_gain_red":  (0.0, 32.0),   # manual ColourGains[0]
+            "colour_gain_blue": (0.0, 32.0),   # manual ColourGains[1]
         }
 
         for field, (lo, hi) in int_fields.items():
@@ -809,8 +858,16 @@ def create_app(
         if "exposure_time" in data:
             cam["exposure_time"] = max(0, min(1_000_000, int(data["exposure_time"])))
 
+        if "max_exposure_us" in data:
+            # max exposure for trap-mode FrameDurationLimits (AE latitude)
+            cam["max_exposure_us"] = max(33_333, min(2_000_000, int(data["max_exposure_us"])))
+
         if "hdr" in data:
-            cam["hdr"] = bool(data["hdr"])
+            new_hdr = bool(data["hdr"])
+            hdr_changed = cam.get("hdr", False) != new_hdr
+            cam["hdr"] = new_hdr
+        else:
+            hdr_changed = False
 
         if "night_vision" in data:
             cam["night_vision"] = bool(data["night_vision"])
@@ -835,7 +892,7 @@ def create_app(
         # is rebuilt and applied to the running camera.
         camera_manager.update_config(_cfg)
 
-        if flip_changed:
+        if flip_changed or hdr_changed:
             # Restart in a background thread so the HTTP response returns
             # immediately and the browser doesn't see a timeout.
             def _restart_camera():
@@ -846,6 +903,51 @@ def create_app(
             _threading.Thread(target=_restart_camera, daemon=True).start()
 
         _save_config(_cfg, config_path)
+
+    @app.post("/api/camera/af_trigger")
+    @require_auth
+    def api_af_trigger():
+        """Trigger a one-shot autofocus cycle then hold the focused position."""
+        ok = camera_manager.trigger_af()
+        return jsonify({"ok": ok})
+
+    # Default camera settings — only camera-section fields are reset
+    _CAMERA_DEFAULTS: dict = {
+        "ae_constraint_mode": 0,
+        "ae_exposure_mode": 0,
+        "ae_metering_mode": 0,
+        "af_mode": 0,
+        "af_range": 0,
+        "af_speed": 0,
+        "analogue_gain": 0.0,
+        "awb_mode": 0,
+        "brightness": 0.0,
+        "colour_gain_blue": 1.0,
+        "colour_gain_red": 1.0,
+        "contrast": 1.6,
+        "exposure_time": 0,
+        "exposure_value": 0.0,
+        "flicker_avoidance_hz": 0,
+        "hdr": False,
+        "hflip": False,
+        "lens_position": 0.0,
+        "max_exposure_us": 66666,
+        "night_vision": False,
+        "noise_reduction_mode": 1,
+        "saturation": 1.2,
+        "sharpness": 1.0,
+        "vflip": False,
+    }
+
+    @app.post("/api/camera/reset")
+    @require_auth
+    def api_camera_reset():
+        """Reset camera settings to factory defaults and apply immediately."""
+        nonlocal _cfg
+        _cfg.setdefault("camera", {}).update(_CAMERA_DEFAULTS)
+        _save_config(_cfg, config_path)
+        camera_manager.update_config(_cfg)
+        return jsonify({"ok": True, "camera": _cfg["camera"]})
 
     def _save_config(cfg: dict, path: str) -> None:
         try:

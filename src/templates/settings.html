@@ -140,6 +140,45 @@
   </form>
 </div>
 
+<!-- PIR Trigger Settings -->
+<div class="card">
+  <h2>PIR Auslöse-Logik</h2>
+  <p style="font-size:.82rem; color:var(--muted); margin-bottom:1rem">
+    Definiert, wie lange ein PIR-Signal anliegen muss und wie viele Pulse in einem Zeitfenster nötig sind, um die Falle auszulösen.
+  </p>
+  <form id="pirForm">
+    <div class="grid-2">
+      <div>
+        <label>Minimale Pulsdauer (ms)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="min_pulse_ms" id="minPulseMs" min="0" max="2000" step="10" value="100"
+                 oninput="document.getElementById('minPulseVal').textContent=this.value+' ms'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="minPulseVal" style="min-width:4rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">100 ms</span>
+        </div>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">PIR muss mindestens diese Zeit HIGH sein, um als gültiger Puls zu gelten (filtert kurze Störimpulse heraus).</p>
+      </div>
+      <div>
+        <label>Anzahl Pulse zum Auslösen</label>
+        <input type="number" name="pulse_count" id="pulseCount" min="1" max="20" step="1" value="1">
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Wie viele gültige Pulse innerhalb des Zeitfensters (unten) nötig sind, um eine Aufnahme zu starten.</p>
+      </div>
+      <div>
+        <label>Zeitfenster für Pulse (s)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="pulse_window_s" id="pulseWindowS" min="1" max="120" step="1" value="5"
+                 oninput="document.getElementById('pulseWindowVal').textContent=this.value+' s'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="pulseWindowVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">5 s</span>
+        </div>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Zeitfenster, innerhalb dessen die Pulse gezählt werden. Nur relevant wenn Pulse &gt; 1.</p>
+      </div>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center">
+      <button type="submit" class="btn btn-primary">Speichern</button>
+      <span id="pirFeedback" style="color:var(--green); font-size:.85rem"></span>
+    </div>
+  </form>
+</div>
+
 <!-- NAS / Samba Settings -->
 <div class="card">
   <h2>NAS / Samba</h2>
@@ -436,7 +475,7 @@ function toggleAutoRefresh() {
 async function loadTrapSettings() {
   const r = await fetch('/api/settings');
   if (!r.ok) return;
-  const { trap = {} } = await r.json();
+  const { trap = {}, pir = {} } = await r.json();
   if (trap.pre_event_seconds != null) {
     document.getElementById('preEvent').value = trap.pre_event_seconds;
     document.getElementById('preVal').textContent = trap.pre_event_seconds;
@@ -444,6 +483,16 @@ async function loadTrapSettings() {
   if (trap.post_event_seconds != null) {
     document.getElementById('postEvent').value = trap.post_event_seconds;
     document.getElementById('postVal').textContent = trap.post_event_seconds;
+  }
+  // PIR settings
+  if (pir.min_pulse_ms != null) {
+    document.getElementById('minPulseMs').value = pir.min_pulse_ms;
+    document.getElementById('minPulseVal').textContent = pir.min_pulse_ms + ' ms';
+  }
+  if (pir.pulse_count != null) document.getElementById('pulseCount').value = pir.pulse_count;
+  if (pir.pulse_window_s != null) {
+    document.getElementById('pulseWindowS').value = pir.pulse_window_s;
+    document.getElementById('pulseWindowVal').textContent = pir.pulse_window_s + ' s';
   }
 }
 
@@ -453,6 +502,19 @@ document.getElementById('trapForm').addEventListener('submit', async e => {
   const payload = {
     pre_event_seconds: parseInt(document.getElementById('preEvent').value),
     post_event_seconds: parseInt(document.getElementById('postEvent').value),
+  };
+  const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
+  setTimeout(() => fb.textContent = '', 3000);
+});
+
+document.getElementById('pirForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fb = document.getElementById('pirFeedback');
+  const payload = {
+    min_pulse_ms: parseFloat(document.getElementById('minPulseMs').value),
+    pulse_count: parseInt(document.getElementById('pulseCount').value),
+    pulse_window_s: parseFloat(document.getElementById('pulseWindowS').value),
   };
   const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';

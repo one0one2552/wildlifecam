@@ -227,6 +227,17 @@
   <p style="margin-top:.6rem; font-size:.8rem; color:var(--muted)">Löst die Kamera wie ein PIR-Signal aus (Pre-/Post-Event gemäß Einstellungen im Live Stream). Nur im TRAP-Modus verfügbar.</p>
 </div>
 
+<!-- Trap Enable / Disable -->
+<div class="card">
+  <h2>Falle / Trap</h2>
+  <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap">
+    <button id="trapEnableBtn" class="btn btn-green" onclick="setTrapEnabled(true)">✔ Falle aktiv</button>
+    <button id="trapDisableBtn" class="btn btn-muted" onclick="setTrapEnabled(false)">✘ Falle deaktiviert</button>
+    <span id="trapStatus" style="font-size:.875rem; color:var(--muted)">…</span>
+  </div>
+  <p style="margin-top:.6rem; font-size:.8rem; color:var(--muted)">Wenn deaktiviert, werden PIR-Signale ignoriert und keine Aufnahmen gestartet.</p>
+</div>
+
 <!-- Relay / Floodlight -->
 <div class="card">
   <h2>IR Floodlight (Relay GPIO18)</h2>
@@ -326,6 +337,42 @@ async function setRelay(state) {
   const data = await r.json();
   document.getElementById('relayStatus').innerHTML = 'Currently: <strong>' + (data.relay ? 'ON' : 'OFF') + '</strong>';
 }
+
+// ── Trap enable/disable ───────────────────────────────────────────────────────
+function _applyTrapUi(enabled) {
+  const enBtn = document.getElementById('trapEnableBtn');
+  const disBtn = document.getElementById('trapDisableBtn');
+  const st = document.getElementById('trapStatus');
+  if (enabled) {
+    enBtn.className = 'btn btn-green';
+    disBtn.className = 'btn btn-muted';
+    st.style.color = 'var(--green)';
+    st.textContent = '● Falle ist aktiv — PIR löst Aufnahmen aus';
+  } else {
+    enBtn.className = 'btn btn-muted';
+    disBtn.className = 'btn btn-danger';
+    st.style.color = 'var(--red)';
+    st.textContent = '○ Falle deaktiviert — PIR wird ignoriert';
+  }
+}
+
+async function setTrapEnabled(enabled) {
+  const r = await fetch('/api/trap/enabled', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  const data = await r.json();
+  _applyTrapUi(data.enabled);
+}
+
+async function loadTrapState() {
+  const r = await fetch('/api/trap/enabled');
+  if (!r.ok) return;
+  const data = await r.json();
+  _applyTrapUi(data.enabled);
+}
+loadTrapState();
 
 // ── Recordings ────────────────────────────────────────────────────────────────
 const UPLOAD_STATUS_LABEL = {
