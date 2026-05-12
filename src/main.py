@@ -78,12 +78,15 @@ def main() -> None:
     # Auto-control IR LED relay during PIR-triggered recordings
     cam_mgr._relay_callback = gpio_mgr.set_relay
 
+    from network_manager import NetworkManager
+    net_mgr = NetworkManager(config)
+
     # Flask app
     from web_server import create_app
     server_cfg = config.get("server", {})
     host = server_cfg.get("host", "0.0.0.0")
     port = int(server_cfg.get("port", 8080))
-    app = create_app(cam_mgr, gpio_mgr, storage_mgr, config, str(_CONFIG_PATH))
+    app = create_app(cam_mgr, gpio_mgr, storage_mgr, net_mgr, config, str(_CONFIG_PATH))
 
     # Graceful shutdown
     def _shutdown(signum, frame):
@@ -91,6 +94,7 @@ def main() -> None:
         gpio_mgr.stop()
         cam_mgr.stop()
         storage_mgr.shutdown()
+        net_mgr.stop()
         logger.info("Shutdown complete.")
         sys.exit(0)
 
@@ -100,6 +104,7 @@ def main() -> None:
     # Start hardware subsystems
     cam_mgr.start()
     gpio_mgr.start()
+    net_mgr.start()
 
     logger.info("Web server starting on http://%s:%d", host, port)
     # Use single-threaded server so Flask doesn't spawn threads that

@@ -80,6 +80,7 @@ from flask import (Flask, Response, jsonify, render_template,
 if TYPE_CHECKING:
     from camera_manager import CameraManager
     from gpio_manager import GPIOManager
+    from network_manager import NetworkManager
     from storage_manager import StorageManager
 
 logger = logging.getLogger(__name__)
@@ -147,10 +148,72 @@ def _read_throttled() -> bool | None:
     return None
 
 
+# ── Power-saving helpers ──────────────────────────────────────────────────────
+
+def _set_pi_leds(off: bool) -> None:
+    """Turn the Pi ACT and PWR LEDs on or off."""
+    try:
+        if off:
+            for led_path, trigger_path in [
+                ("/sys/class/leds/ACT/trigger",    "/sys/class/leds/ACT/trigger"),
+                ("/sys/class/leds/PWR/trigger",    "/sys/class/leds/PWR/trigger"),
+            ]:
+                try:
+                    with open(led_path, "w") as f:
+                        f.write("none")
+                except OSError:
+                    pass
+            for brightness_path in [
+                "/sys/class/leds/ACT/brightness",
+                "/sys/class/leds/PWR/brightness",
+            ]:
+                try:
+                    with open(brightness_path, "w") as f:
+                        f.write("0")
+                except OSError:
+                    pass
+        else:
+            # Restore default triggers
+            try:
+                with open("/sys/class/leds/ACT/trigger", "w") as f:
+                    f.write("mmc0")
+            except OSError:
+                pass
+            try:
+                with open("/sys/class/leds/PWR/brightness", "w") as f:
+                    f.write("1")
+            except OSError:
+                pass
+    except Exception:
+        logger.debug("LED control not available", exc_info=True)
+
+
+def _set_bluetooth(off: bool) -> None:
+    """Block or unblock Bluetooth via rfkill."""
+    try:
+        action = "block" if off else "unblock"
+        subprocess.run(["rfkill", action, "bluetooth"], capture_output=True, timeout=5)
+    except Exception:
+        logger.debug("rfkill not available", exc_info=True)
+
+
+def _set_hdmi(off: bool) -> None:
+    """Enable or disable HDMI output via vcgencmd."""
+    try:
+        value = "0" if off else "1"
+        subprocess.run(
+            ["vcgencmd", "display_power", value],
+            capture_output=True, timeout=5,
+        )
+    except Exception:
+        logger.debug("vcgencmd display_power not available", exc_info=True)
+
+
 def create_app(
     camera_manager: "CameraManager",
     gpio_manager: "GPIOManager",
     storage_manager: "StorageManager",
+    network_manager: "NetworkManager",
     config: dict,
     config_path: str = "config.yaml",
 ) -> Flask:
@@ -158,6 +221,15 @@ def create_app(
     app.config["SECRET_KEY"] = "wc-pi4-secret"
 
     _cfg = config
+
+    # Apply persisted power-saving settings on startup
+    _ps = _cfg.get("power_saving", {})
+    if _ps.get("leds_off"):
+        _set_pi_leds(True)
+    if _ps.get("bluetooth_off"):
+        _set_bluetooth(True)
+    if _ps.get("hdmi_off"):
+        _set_hdmi(True)
 
     # Migrate old single-user config to new multi-user list format
     _srv = _cfg.setdefault("server", {})
@@ -369,9 +441,10 @@ def create_app(
             "camera": _cfg.get("camera", {}),
             "trap": _cfg.get("trap", {}),
             "pir": {
-                "min_pulse_ms": pir_cfg.get("min_pulse_ms", 100),
-                "pulse_count": pir_cfg.get("pulse_count", 1),
-                "pulse_window_s": pir_cfg.get("pulse_window_s", 5.0),
+                "min_pulse_ms":       pir_cfg.get("min_pulse_ms", 100),
+                "pulse_window_min_ms": pir_cfg.get("pulse_window_min_ms", 50.0),
+                "pulse_count":        pir_cfg.get("pulse_count", 1),
+                "pulse_window_s":     pir_cfg.get("pulse_window_s", 5.0),
             },
             "trap_enabled": gpio_manager.get_trap_enabled(),
             "nas": {
@@ -445,6 +518,35 @@ def create_app(
             return jsonify({"ok": True})
         except Exception as exc:
             return jsonify({"ok": False, "reason": str(exc)[:300]}), 500
+
+    @app.delete("/api/recordings/nas")
+    @require_auth
+    def api_multi_delete_nas_recordings():
+        data = request.get_json(force=True, silent=True) or {}
+        filenames = data.get("filenames", [])
+        nas = storage_manager
+        deleted, errors = [], []
+        try:
+            import smbclient  # type: ignore
+            smbclient.register_session(
+                nas._nas_server, username=nas._nas_user, password=nas._nas_password,
+            )
+            nas_remote = nas._nas_remote_path.replace("/", "\\")
+            for fname in filenames:
+                if not re.match(r'^[\w\-\.]+$', fname):
+                    errors.append(fname)
+                    continue
+                try:
+                    remote_file = f"\\\\{nas._nas_server}\\{nas._nas_share}{nas_remote}\\{fname}"
+                    smbclient.remove(remote_file)
+                    deleted.append(fname)
+                    logger.info("NAS recording deleted: %s", fname)
+                except Exception as exc:
+                    logger.warning("Failed to delete NAS file %s: %s", fname, exc)
+                    errors.append(fname)
+        except Exception as exc:
+            return jsonify({"deleted": deleted, "errors": errors, "reason": str(exc)[:300]}), 500
+        return jsonify({"deleted": deleted, "errors": errors})
 
     @app.get("/recordings/<path:filename>")
     @require_auth
@@ -653,6 +755,84 @@ def create_app(
         _update_camera_settings(data)
         return jsonify({"ok": True})
 
+    # ------------------------------------------------------------------ #
+    # Power saving API                                                     #
+    # ------------------------------------------------------------------ #
+
+    @app.get("/api/power_saving")
+    @require_auth
+    def api_power_saving_get():
+        ps = _cfg.get("power_saving", {})
+        return jsonify({
+            "leds_off":      bool(ps.get("leds_off", False)),
+            "bluetooth_off": bool(ps.get("bluetooth_off", False)),
+            "hdmi_off":      bool(ps.get("hdmi_off", False)),
+        })
+
+    @app.post("/api/power_saving")
+    @require_auth
+    def api_power_saving_set():
+        data = request.get_json(force=True, silent=True) or {}
+        ps = _cfg.setdefault("power_saving", {})
+        changed = False
+        if "leds_off" in data:
+            val = bool(data["leds_off"])
+            ps["leds_off"] = val
+            _set_pi_leds(val)
+            changed = True
+        if "bluetooth_off" in data:
+            val = bool(data["bluetooth_off"])
+            ps["bluetooth_off"] = val
+            _set_bluetooth(val)
+            changed = True
+        if "hdmi_off" in data:
+            val = bool(data["hdmi_off"])
+            ps["hdmi_off"] = val
+            _set_hdmi(val)
+            changed = True
+        if changed:
+            _save_config(_cfg, config_path)
+        return jsonify({"ok": True, "power_saving": ps})
+
+    # ------------------------------------------------------------------ #
+    # Network / hotspot API                                                #
+    # ------------------------------------------------------------------ #
+
+    @app.get("/api/network/status")
+    @require_auth
+    def api_network_status():
+        return jsonify(network_manager.get_status())
+
+    @app.get("/api/network/hotspot")
+    @require_auth
+    def api_hotspot_get():
+        hs = _cfg.get("network", {}).get("hotspot", {})
+        return jsonify({
+            "enabled":    bool(hs.get("enabled", True)),
+            "ssid":       hs.get("ssid", "owl_wildcam"),
+            "timeout_s":  float(hs.get("timeout_s", 120)),
+            "ip":         hs.get("ip", "192.168.4.4"),
+        })
+
+    @app.post("/api/network/hotspot")
+    @require_auth
+    def api_hotspot_set():
+        data = request.get_json(force=True, silent=True) or {}
+        hs = _cfg.setdefault("network", {}).setdefault("hotspot", {})
+        if "enabled" in data:
+            hs["enabled"] = bool(data["enabled"])
+        if "ssid" in data:
+            hs["ssid"] = str(data["ssid"])[:64]
+        if "password" in data and data["password"]:
+            hs["password"] = str(data["password"])[:128]
+        if "timeout_s" in data:
+            hs["timeout_s"] = max(30.0, min(600.0, float(data["timeout_s"])))
+        if "ip" in data:
+            hs["ip"] = str(data["ip"])[:39]
+        network_manager.update_config(_cfg)
+        _save_config(_cfg, config_path)
+        return jsonify({"ok": True})
+
     @app.post("/api/nas/test")
     @require_auth
     def api_nas_test():
@@ -788,11 +968,14 @@ def create_app(
         if "min_pulse_ms" in data:
             pir["min_pulse_ms"] = max(0.0, min(5000.0, float(data["min_pulse_ms"])))
             changed_pir = True
+        if "pulse_window_min_ms" in data:
+            pir["pulse_window_min_ms"] = max(0.0, min(5000.0, float(data["pulse_window_min_ms"])))
+            changed_pir = True
         if "pulse_count" in data:
             pir["pulse_count"] = max(1, min(20, int(data["pulse_count"])))
             changed_pir = True
         if "pulse_window_s" in data:
-            pir["pulse_window_s"] = max(1.0, min(300.0, float(data["pulse_window_s"])))
+            pir["pulse_window_s"] = max(0.5, min(3.0, float(data["pulse_window_s"])))
             changed_pir = True
         if changed_pir:
             gpio_manager.update_config(_cfg)

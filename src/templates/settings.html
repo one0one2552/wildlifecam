@@ -144,7 +144,8 @@
 <div class="card">
   <h2>PIR Auslöse-Logik</h2>
   <p style="font-size:.82rem; color:var(--muted); margin-bottom:1rem">
-    Definiert, wie lange ein PIR-Signal anliegen muss und wie viele Pulse in einem Zeitfenster nötig sind, um die Falle auszulösen.
+    Auslösung erfolgt per <strong>ODER</strong>-Logik: entweder ein einzelner langer Puls (≥ Bedingung 1)
+    oder mehrere kürzere Pulse im Zeitfenster (≥ Bedingung 2, Anzahl erreicht).
   </p>
   <form id="pirForm">
     <div class="grid-2">
@@ -155,19 +156,28 @@
                  oninput="document.getElementById('minPulseVal').textContent=this.value+' ms'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
           <span id="minPulseVal" style="min-width:4rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">100 ms</span>
         </div>
-        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">PIR muss mindestens diese Zeit HIGH sein, um als gültiger Puls zu gelten (filtert kurze Störimpulse heraus).</p>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">OR-Bedingung 1: PIR muss mindestens diese Zeit HIGH sein um sofort auszulösen.</p>
+      </div>
+      <div>
+        <label>Mindest-Pulsdauer im Zeitfenster (ms)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="pulse_window_min_ms" id="pulseWindowMinMs" min="0" max="500" step="5" value="50"
+                 oninput="document.getElementById('pulseWindowMinVal').textContent=this.value+' ms'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="pulseWindowMinVal" style="min-width:4rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">50 ms</span>
+        </div>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">OR-Bedingung 2: Minimale Pulsdauer für die Fenster-Zählung (kann kürzer als Bedingung 1 sein).</p>
       </div>
       <div>
         <label>Anzahl Pulse zum Auslösen</label>
         <input type="number" name="pulse_count" id="pulseCount" min="1" max="20" step="1" value="1">
-        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Wie viele gültige Pulse innerhalb des Zeitfensters (unten) nötig sind, um eine Aufnahme zu starten.</p>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Wie viele Kurzpulse innerhalb des Zeitfensters für OR-Bedingung 2 nötig sind.</p>
       </div>
       <div>
         <label>Zeitfenster für Pulse (s)</label>
         <div style="display:flex; align-items:center; gap:.5rem">
-          <input type="range" name="pulse_window_s" id="pulseWindowS" min="1" max="120" step="1" value="5"
-                 oninput="document.getElementById('pulseWindowVal').textContent=this.value+' s'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
-          <span id="pulseWindowVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">5 s</span>
+          <input type="range" name="pulse_window_s" id="pulseWindowS" min="0.5" max="3" step="0.1" value="1"
+                 oninput="document.getElementById('pulseWindowVal').textContent=parseFloat(this.value).toFixed(1)+' s'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="pulseWindowVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">1.0 s</span>
         </div>
         <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Zeitfenster, innerhalb dessen die Pulse gezählt werden. Nur relevant wenn Pulse &gt; 1.</p>
       </div>
@@ -238,6 +248,80 @@
       <button type="submit" class="btn btn-primary">Verbinden</button>
       <button type="button" class="btn btn-muted" onclick="document.getElementById('wifiForm').style.display='none'">Abbrechen</button>
       <span id="wifiFeedback" style="font-size:.82rem"></span>
+    </div>
+  </form>
+</div>
+
+<!-- Hotspot Fallback -->
+<div class="card">
+  <h2>Hotspot Fallback (kein WLAN)</h2>
+  <p style="font-size:.82rem; color:var(--muted); margin-bottom:1rem">
+    Kann der Pi kein WLAN erreichen, öffnet er nach dem eingestellten Timeout automatisch einen eigenen Hotspot.
+    Das Webinterface ist dann unter <strong id="hotspotIpDisplay">192.168.4.4</strong>:8080 erreichbar.
+  </p>
+  <p style="font-size:.82rem; margin-bottom:1rem">
+    Netzwerkstatus: <strong id="netModeDisplay" style="color:var(--cta)">…</strong>
+  </p>
+  <form id="hotspotForm">
+    <div style="margin-bottom:.9rem">
+      <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.9rem">
+        <input type="checkbox" name="hotspot_enabled" id="hotspotEnabled">
+        Hotspot-Fallback aktiviert
+      </label>
+    </div>
+    <div class="grid-2">
+      <div>
+        <label>Hotspot SSID</label>
+        <input type="text" name="hotspot_ssid" id="hotspotSsid" placeholder="owl_wildcam">
+      </div>
+      <div>
+        <label>Hotspot Passwort</label>
+        <input type="password" name="hotspot_password" id="hotspotPassword" placeholder="(leer lassen um nicht zu ändern)">
+      </div>
+      <div>
+        <label>Timeout ohne WLAN (s)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="hotspot_timeout_s" id="hotspotTimeout" min="30" max="600" step="10" value="120"
+                 oninput="document.getElementById('hotspotTimeoutVal').textContent=this.value+' s'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="hotspotTimeoutVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">120 s</span>
+        </div>
+      </div>
+      <div>
+        <label>Hotspot IP-Adresse</label>
+        <input type="text" name="hotspot_ip" id="hotspotIp" placeholder="192.168.4.4">
+      </div>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center">
+      <button type="submit" class="btn btn-primary">Speichern</button>
+      <span id="hotspotFeedback" style="color:var(--green); font-size:.85rem"></span>
+    </div>
+  </form>
+</div>
+
+<!-- Power Saving -->
+<div class="card">
+  <h2>Energiesparen</h2>
+  <p style="font-size:.82rem; color:var(--muted); margin-bottom:1rem">
+    Deaktiviert unnötige Hardware-Komponenten des Pi. Einstellungen werden sofort angewendet und beim nächsten Start wiederhergestellt.
+  </p>
+  <form id="powerForm">
+    <div style="display:flex; flex-direction:column; gap:.7rem">
+      <label style="display:flex; align-items:center; gap:.6rem; cursor:pointer; font-size:.9rem">
+        <input type="checkbox" name="leds_off" id="ledsOff">
+        Pi-LEDs ausschalten (ACT + PWR)
+      </label>
+      <label style="display:flex; align-items:center; gap:.6rem; cursor:pointer; font-size:.9rem">
+        <input type="checkbox" name="bluetooth_off" id="bluetoothOff">
+        Bluetooth deaktivieren (rfkill)
+      </label>
+      <label style="display:flex; align-items:center; gap:.6rem; cursor:pointer; font-size:.9rem">
+        <input type="checkbox" name="hdmi_off" id="hdmiOff">
+        HDMI-Ausgang abschalten (vcgencmd)
+      </label>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center">
+      <button type="submit" class="btn btn-primary">Anwenden &amp; Speichern</button>
+      <span id="powerFeedback" style="color:var(--green); font-size:.85rem"></span>
     </div>
   </form>
 </div>
@@ -489,10 +573,14 @@ async function loadTrapSettings() {
     document.getElementById('minPulseMs').value = pir.min_pulse_ms;
     document.getElementById('minPulseVal').textContent = pir.min_pulse_ms + ' ms';
   }
+  if (pir.pulse_window_min_ms != null) {
+    document.getElementById('pulseWindowMinMs').value = pir.pulse_window_min_ms;
+    document.getElementById('pulseWindowMinVal').textContent = pir.pulse_window_min_ms + ' ms';
+  }
   if (pir.pulse_count != null) document.getElementById('pulseCount').value = pir.pulse_count;
   if (pir.pulse_window_s != null) {
     document.getElementById('pulseWindowS').value = pir.pulse_window_s;
-    document.getElementById('pulseWindowVal').textContent = pir.pulse_window_s + ' s';
+    document.getElementById('pulseWindowVal').textContent = parseFloat(pir.pulse_window_s).toFixed(1) + ' s';
   }
 }
 
@@ -513,6 +601,7 @@ document.getElementById('pirForm').addEventListener('submit', async e => {
   const fb = document.getElementById('pirFeedback');
   const payload = {
     min_pulse_ms: parseFloat(document.getElementById('minPulseMs').value),
+    pulse_window_min_ms: parseFloat(document.getElementById('pulseWindowMinMs').value),
     pulse_count: parseInt(document.getElementById('pulseCount').value),
     pulse_window_s: parseFloat(document.getElementById('pulseWindowS').value),
   };
@@ -573,6 +662,74 @@ function toggleHealthRefresh() {
   }
 }
 
+// ── Hotspot ───────────────────────────────────────────────────────────────────
+async function loadHotspotSettings() {
+  const [hsR, netR] = await Promise.all([
+    fetch('/api/network/hotspot'),
+    fetch('/api/network/status'),
+  ]);
+  if (hsR.ok) {
+    const hs = await hsR.json();
+    document.getElementById('hotspotEnabled').checked = !!hs.enabled;
+    document.getElementById('hotspotSsid').value = hs.ssid || 'owl_wildcam';
+    document.getElementById('hotspotTimeout').value = hs.timeout_s || 120;
+    document.getElementById('hotspotTimeoutVal').textContent = (hs.timeout_s || 120) + ' s';
+    document.getElementById('hotspotIp').value = hs.ip || '192.168.4.4';
+    document.getElementById('hotspotIpDisplay').textContent = hs.ip || '192.168.4.4';
+  }
+  if (netR.ok) {
+    const net = await netR.json();
+    const modeMap = { wifi: '📶 WLAN verbunden', hotspot: '📡 Hotspot aktiv', disconnected: '❌ Keine Verbindung' };
+    document.getElementById('netModeDisplay').textContent = modeMap[net.mode] || net.mode;
+    if (net.wifi_ssid) {
+      document.getElementById('netModeDisplay').textContent += ' (' + net.wifi_ssid + ')';
+    }
+  }
+}
+
+document.getElementById('hotspotForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fb = document.getElementById('hotspotFeedback');
+  const fd = new FormData(e.target);
+  const payload = {
+    enabled: fd.get('hotspot_enabled') === 'on',
+    ssid: fd.get('hotspot_ssid'),
+    timeout_s: parseFloat(document.getElementById('hotspotTimeout').value),
+    ip: fd.get('hotspot_ip'),
+  };
+  const pw = fd.get('hotspot_password');
+  if (pw) payload.password = pw;
+  const r = await fetch('/api/network/hotspot', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  fb.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+  fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';
+  if (r.ok) document.getElementById('hotspotIpDisplay').textContent = payload.ip;
+  setTimeout(() => fb.textContent = '', 3000);
+});
+
+// ── Power Saving ──────────────────────────────────────────────────────────────
+async function loadPowerSaving() {
+  const r = await fetch('/api/power_saving');
+  if (!r.ok) return;
+  const ps = await r.json();
+  document.getElementById('ledsOff').checked      = !!ps.leds_off;
+  document.getElementById('bluetoothOff').checked = !!ps.bluetooth_off;
+  document.getElementById('hdmiOff').checked       = !!ps.hdmi_off;
+}
+
+document.getElementById('powerForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fb = document.getElementById('powerFeedback');
+  const payload = {
+    leds_off:      document.getElementById('ledsOff').checked,
+    bluetooth_off: document.getElementById('bluetoothOff').checked,
+    hdmi_off:      document.getElementById('hdmiOff').checked,
+  };
+  const r = await fetch('/api/power_saving', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  fb.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+  fb.textContent = r.ok ? '✓ Angewendet' : '✗ Fehler';
+  setTimeout(() => fb.textContent = '', 3000);
+});
+
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function logout() {
   try { await fetch('/logout', { headers: { 'Authorization': 'Basic ' + btoa('logout:logout') } }); } catch {}
@@ -583,6 +740,8 @@ async function logout() {
 loadNasSettings();
 loadTrapSettings();
 scanWifi();
+loadHotspotSettings();
+loadPowerSaving();
 loadLogs();
 loadHealth();
 

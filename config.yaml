@@ -1,13 +1,13 @@
 camera:
   ae_constraint_mode: 0
   ae_exposure_mode: 0
-  ae_metering_mode: 0
+  ae_metering_mode: 1
   af_mode: 0
   af_range: 0
   af_speed: 0
   analogue_gain: 0.0
   awb_mode: 0
-  brightness: 0.0
+  brightness: 0.2
   colour_gain_blue: 1.0
   colour_gain_red: 1.0
   contrast: 1.6
@@ -16,9 +16,9 @@ camera:
   flicker_avoidance_hz: 0
   hdr: false
   hflip: false
-  lens_position: 5.2
-  max_exposure_us: 66666
-  night_vision: false
+  lens_position: 5.8
+  max_exposure_us: 67333
+  night_vision: true
   noise_reduction_mode: 1
   saturation: 1.2
   sharpness: 1.0
@@ -32,10 +32,15 @@ live:
   watchdog_seconds: 180
 pir:
   gpio_pin: 17
-  min_pulse_ms: 100
+  min_pulse_ms: 200.0
   pull_down: true
-  pulse_count: 1
-  pulse_window_s: 5.0
+  pulse_count: 4
+  pulse_window_min_ms: 45.0
+  pulse_window_s: 1.2
+power_saving:
+  bluetooth_off: true
+  hdmi_off: true
+  leds_off: true
 relay:
   active_high: true
   gpio_pin: 18
@@ -64,10 +69,10 @@ storage:
     username: root
   recordings_path: /recordings
 trap:
-  enabled: false
+  enabled: true
   framerate: 30
-  post_event_seconds: 3
-  pre_event_seconds: 1
+  post_event_seconds: 8
+  pre_event_seconds: 2
   resolution:
   - 1920
   - 1080
