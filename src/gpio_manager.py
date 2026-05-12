@@ -63,6 +63,8 @@ class GPIOManager:
         self._pulse_window_min_ms: float = float(pir_cfg.get("pulse_window_min_ms", 50.0))
         self._pulse_count: int = max(1, int(pir_cfg.get("pulse_count", 1)))
         self._pulse_window_s: float = float(pir_cfg.get("pulse_window_s", 5.0))
+        # Poll interval (hot-reloadable); clamped 10–500 ms
+        self._poll_interval: float = max(0.01, min(0.5, float(pir_cfg.get("poll_interval_ms", 50)) / 1000.0))
 
         self._on_motion = on_motion
         self._relay_state = False
@@ -158,6 +160,7 @@ class GPIOManager:
             self._pulse_window_min_ms = float(pir_cfg.get("pulse_window_min_ms", 50.0))
             self._pulse_count = max(1, int(pir_cfg.get("pulse_count", 1)))
             self._pulse_window_s = float(pir_cfg.get("pulse_window_s", 5.0))
+            self._poll_interval = max(0.01, min(0.5, float(pir_cfg.get("poll_interval_ms", 50)) / 1000.0))
             self._trap_enabled = bool(config.get("trap", {}).get("enabled", True))
 
     # ------------------------------------------------------------------ #
@@ -278,4 +281,4 @@ class GPIOManager:
                 last_val = val
             except Exception:
                 logger.exception("PIR poll error")
-            time.sleep(_POLL_INTERVAL)
+            time.sleep(self._poll_interval)

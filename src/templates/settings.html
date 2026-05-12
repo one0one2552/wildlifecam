@@ -180,7 +180,16 @@
           <span id="pulseWindowVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">1.0 s</span>
         </div>
         <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Zeitfenster, innerhalb dessen die Pulse gezählt werden. Nur relevant wenn Pulse &gt; 1.</p>
-      </div>      <div style="grid-column:span 2">
+      </div>      <div>
+        <label>Abtastrate PIR-Eingang (ms)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="poll_interval_ms" id="pollIntervalMs" min="10" max="500" step="10" value="50"
+                 oninput="document.getElementById('pollIntervalVal').textContent=this.value+' ms ('+Math.round(1000/this.value)+' Hz)'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="pollIntervalVal" style="min-width:8rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">50 ms (20 Hz)</span>
+        </div>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Wie oft der PIR-Pin abgefragt wird. Kleinere Werte = höhere Abtastrate, mehr CPU-Last.</p>
+      </div>
+      <div style="grid-column:span 2">
         <label style="display:flex; align-items:center; gap:.6rem; cursor:pointer; font-size:.9rem; margin-bottom:.2rem">
           <input type="checkbox" name="save_graph" id="saveGraph">
           PIR-Graph mit jeder Aufnahme speichern (JPEG)
@@ -587,6 +596,11 @@ async function loadTrapSettings() {
     document.getElementById('pulseWindowS').value = pir.pulse_window_s;
     document.getElementById('pulseWindowVal').textContent = parseFloat(pir.pulse_window_s).toFixed(1) + ' s';
   }
+  if (pir.poll_interval_ms != null) {
+    const ms = pir.poll_interval_ms;
+    document.getElementById('pollIntervalMs').value = ms;
+    document.getElementById('pollIntervalVal').textContent = ms + ' ms (' + Math.round(1000/ms) + ' Hz)';
+  }
   if (pir.save_graph != null) document.getElementById('saveGraph').checked = !!pir.save_graph;
 }
 
@@ -610,6 +624,7 @@ document.getElementById('pirForm').addEventListener('submit', async e => {
     pulse_window_min_ms: parseFloat(document.getElementById('pulseWindowMinMs').value),
     pulse_count: parseInt(document.getElementById('pulseCount').value),
     pulse_window_s: parseFloat(document.getElementById('pulseWindowS').value),
+    poll_interval_ms: parseInt(document.getElementById('pollIntervalMs').value),
     save_graph: document.getElementById('saveGraph').checked,
   };
   const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });

@@ -445,6 +445,7 @@ def create_app(
                 "pulse_window_min_ms": pir_cfg.get("pulse_window_min_ms", 50.0),
                 "pulse_count":         pir_cfg.get("pulse_count", 1),
                 "pulse_window_s":      pir_cfg.get("pulse_window_s", 5.0),
+                "poll_interval_ms":    pir_cfg.get("poll_interval_ms", 50),
                 "save_graph":          bool(pir_cfg.get("save_graph", False)),
             },
             "trap_enabled": gpio_manager.get_trap_enabled(),
@@ -977,6 +978,9 @@ def create_app(
             changed_pir = True
         if "pulse_window_s" in data:
             pir["pulse_window_s"] = max(0.5, min(3.0, float(data["pulse_window_s"])))
+            changed_pir = True
+        if "poll_interval_ms" in data:
+            pir["poll_interval_ms"] = max(10, min(500, int(data["poll_interval_ms"])))
             changed_pir = True
         if "save_graph" in data:
             pir["save_graph"] = bool(data["save_graph"])

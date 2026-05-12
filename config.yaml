@@ -35,9 +35,10 @@ pir:
   min_pulse_ms: 100.0
   pull_down: true
   pulse_count: 3
+  poll_interval_ms: 50
   pulse_window_min_ms: 20.0
   pulse_window_s: 0.8
-  save_graph: false
+  save_graph: true
 power_saving:
   bluetooth_off: true
   hdmi_off: true
@@ -72,7 +73,7 @@ storage:
 trap:
   enabled: true
   framerate: 30
-  post_event_seconds: 8
+  post_event_seconds: 2
   pre_event_seconds: 2
   resolution:
   - 1920
