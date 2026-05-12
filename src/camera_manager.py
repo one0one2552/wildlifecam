@@ -749,22 +749,26 @@ class CameraManager:
 
             # Wait until POST_EVENT_SECONDS have passed with no PIR activity.
             # Each PIR re-trigger resets _last_pir_time, extending the window.
+            # The elapsed check and the stop decision are made atomically inside
+            # the lock so that a concurrent trigger_recording() call cannot slip
+            # in between the check and the circ_output.stop() transition.
             _poll = 0.5
             while True:
                 time.sleep(_poll)
+                stop_now = False
                 with self._lock:
                     if self._state != CameraState.RECORDING:
                         return  # Cancelled externally (e.g. LIVE request)
                     elapsed = time.monotonic() - self._last_pir_time
-                if elapsed >= self.POST_EVENT_SECONDS:
+                    if elapsed >= self.POST_EVENT_SECONDS:
+                        stop_now = True
+                        if self._cam:
+                            self._circ_output.stop()
+                        self._state = CameraState.TRAP
+                if stop_now:
                     break
                 logger.debug("Recording active — %.1fs since last PIR (limit %ds)",
                              elapsed, self.POST_EVENT_SECONDS)
-
-            with self._lock:
-                if self._cam:
-                    self._circ_output.stop()
-                self._state = CameraState.TRAP
             if self._relay_callback:
                 try:
                     self._relay_callback(False)
