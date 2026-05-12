@@ -76,10 +76,13 @@ def _save_pir_graph(
     pir_log: list,
     trigger_time: float,
     pre_event_seconds: float,
+    graph_pre_s: float = 30.0,
+    graph_post_s: float = 30.0,
 ) -> None:
     """Generate a step-plot of the PIR signal and save it as a JPEG alongside the recording.
 
     The X axis is time relative to the trigger moment (negative = pre-event).
+    graph_pre_s / graph_post_s control how much of the log is shown on each side.
     """
     try:
         import matplotlib
@@ -94,10 +97,16 @@ def _save_pir_graph(
         logger.debug("PIR log empty — skipping graph")
         return
 
-    times  = [t - trigger_time for t, _ in pir_log]
-    values = [v for _, v in pir_log]
+    # Clip data to the requested display window
+    win_start = trigger_time - graph_pre_s
+    win_end   = trigger_time + graph_post_s
+    clipped = [(t, v) for t, v in pir_log if win_start <= t <= win_end]
+    if not clipped:
+        clipped = pir_log  # fall back to full log if window is empty
+    times  = [t - trigger_time for t, _ in clipped]
+    values = [v for _, v in clipped]
 
-    fig, ax = plt.subplots(figsize=(10, 2.8))
+    fig, ax = plt.subplots(figsize=(17.5, 4.9))
     fig.patch.set_facecolor("#0A2540")
     ax.set_facecolor("#0A2540")
 
@@ -108,10 +117,11 @@ def _save_pir_graph(
     ax.axvline(0, color="#FF4444", linewidth=1.2, linestyle="--", label="Trigger")
 
     # Pre-event shading
-    ax.axvspan(times[0], -pre_event_seconds, alpha=0.08, color="#FFFFFF",
+    shade_start = max(times[0], -graph_pre_s)
+    ax.axvspan(shade_start, -pre_event_seconds, alpha=0.08, color="#FFFFFF",
                label=f"Pre-event ({pre_event_seconds:.0f}s)")
 
-    ax.set_xlim(times[0], times[-1])
+    ax.set_xlim(-graph_pre_s, graph_post_s)
     ax.set_ylim(-0.05, 1.15)
     ax.set_yticks([0, 1])
     ax.set_yticklabels(["LOW", "HIGH"], color="#A8D8FF", fontsize=8)
@@ -229,9 +239,10 @@ class CameraManager:
         self._hdr_enabled: bool = bool(cam_cfg.get("hdr", False))
 
         # PIR graph feature
-        self._pir_graph_enabled: bool = bool(
-            cfg.get("pir", {}).get("save_graph", False)
-        )
+        pir_cfg = cfg.get("pir", {})
+        self._pir_graph_enabled: bool = bool(pir_cfg.get("save_graph", False))
+        self._graph_pre_s: float  = max(5.0, min(300.0, float(pir_cfg.get("graph_pre_s",  30.0))))
+        self._graph_post_s: float = max(5.0, min(300.0, float(pir_cfg.get("graph_post_s", 30.0))))
 
         self._transform = Transform(
             hflip=bool(cam_cfg.get("hflip", False)),
@@ -727,10 +738,11 @@ class CameraManager:
                 try:
                     trigger_time = getattr(self, "_recording_trigger_time", None)
                     if trigger_time is not None:
-                        history_since = trigger_time - self.PRE_EVENT_SECONDS - 1.0
+                        history_since = trigger_time - max(self._graph_pre_s, self.PRE_EVENT_SECONDS) - 1.0
                         pir_log = self._pir_history_cb(history_since)
                         _save_pir_graph(
-                            out_path, pir_log, trigger_time, self.PRE_EVENT_SECONDS
+                            out_path, pir_log, trigger_time, self.PRE_EVENT_SECONDS,
+                            self._graph_pre_s, self._graph_post_s,
                         )
                 except Exception:
                     logger.exception("PIR graph generation failed (non-fatal)")

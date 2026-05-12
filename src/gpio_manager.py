@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _GPIOCHIP = 0
 _PIR_DEBOUNCE_MS = 300       # ignore re-triggers within this window
 _POLL_INTERVAL = 0.05        # seconds between PIR polls
-_PIR_LOG_WINDOW_S = 120      # seconds of PIR history to retain
+_PIR_LOG_WINDOW_S = 360      # seconds of PIR history to retain (covers max graph_pre_s=300 + margin)
 
 
 class GPIOManager:

@@ -33,12 +33,14 @@ live:
 pir:
   gpio_pin: 17
   min_pulse_ms: 100.0
+  poll_interval_ms: 10
   pull_down: true
   pulse_count: 3
-  poll_interval_ms: 50
   pulse_window_min_ms: 20.0
   pulse_window_s: 0.8
   save_graph: true
+  graph_pre_s: 30
+  graph_post_s: 30
 power_saving:
   bluetooth_off: true
   hdmi_off: true

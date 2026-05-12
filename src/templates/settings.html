@@ -195,6 +195,24 @@
           PIR-Graph mit jeder Aufnahme speichern (JPEG)
         </label>
         <p style="font-size:.75rem; color:var(--muted)">Speichert ein Diagramm des PIR-Signals als <code>.jpg</code> mit dem gleichen Dateinamen wie die MP4-Aufnahme.</p>
+      </div>
+      <div>
+        <label>Graph: Zeit vor Auslösung (s)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="graph_pre_s" id="graphPreS" min="5" max="120" step="5" value="30"
+                 oninput="document.getElementById('graphPreVal').textContent=this.value+' s'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="graphPreVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">30 s</span>
+        </div>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Wie viel Zeit vor der Auslösung im Graphen dargestellt wird.</p>
+      </div>
+      <div>
+        <label>Graph: Zeit nach Auslösung (s)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="graph_post_s" id="graphPostS" min="5" max="120" step="5" value="30"
+                 oninput="document.getElementById('graphPostVal').textContent=this.value+' s'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="graphPostVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">30 s</span>
+        </div>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Wie viel Zeit nach der Auslösung im Graphen dargestellt wird.</p>
       </div>    </div>
     <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center">
       <button type="submit" class="btn btn-primary">Speichern</button>
@@ -601,6 +619,14 @@ async function loadTrapSettings() {
     document.getElementById('pollIntervalMs').value = ms;
     document.getElementById('pollIntervalVal').textContent = ms + ' ms (' + Math.round(1000/ms) + ' Hz)';
   }
+  if (pir.graph_pre_s != null) {
+    document.getElementById('graphPreS').value = pir.graph_pre_s;
+    document.getElementById('graphPreVal').textContent = pir.graph_pre_s + ' s';
+  }
+  if (pir.graph_post_s != null) {
+    document.getElementById('graphPostS').value = pir.graph_post_s;
+    document.getElementById('graphPostVal').textContent = pir.graph_post_s + ' s';
+  }
   if (pir.save_graph != null) document.getElementById('saveGraph').checked = !!pir.save_graph;
 }
 
@@ -626,6 +652,8 @@ document.getElementById('pirForm').addEventListener('submit', async e => {
     pulse_window_s: parseFloat(document.getElementById('pulseWindowS').value),
     poll_interval_ms: parseInt(document.getElementById('pollIntervalMs').value),
     save_graph: document.getElementById('saveGraph').checked,
+    graph_pre_s: parseInt(document.getElementById('graphPreS').value),
+    graph_post_s: parseInt(document.getElementById('graphPostS').value),
   };
   const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';

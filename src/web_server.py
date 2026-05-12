@@ -447,6 +447,8 @@ def create_app(
                 "pulse_window_s":      pir_cfg.get("pulse_window_s", 5.0),
                 "poll_interval_ms":    pir_cfg.get("poll_interval_ms", 50),
                 "save_graph":          bool(pir_cfg.get("save_graph", False)),
+                "graph_pre_s":         pir_cfg.get("graph_pre_s", 30),
+                "graph_post_s":        pir_cfg.get("graph_post_s", 30),
             },
             "trap_enabled": gpio_manager.get_trap_enabled(),
             "nas": {
@@ -984,6 +986,12 @@ def create_app(
             changed_pir = True
         if "save_graph" in data:
             pir["save_graph"] = bool(data["save_graph"])
+            changed_pir = True
+        if "graph_pre_s" in data:
+            pir["graph_pre_s"] = max(5, min(300, int(data["graph_pre_s"])))
+            changed_pir = True
+        if "graph_post_s" in data:
+            pir["graph_post_s"] = max(5, min(300, int(data["graph_post_s"])))
             changed_pir = True
         if changed_pir:
             gpio_manager.update_config(_cfg)
