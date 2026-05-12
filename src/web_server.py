@@ -437,6 +437,7 @@ def create_app(
     def api_settings_get():
         nas = _cfg.get("storage", {}).get("nas", {})
         pir_cfg = _cfg.get("pir", {})
+        relay_cfg = _cfg.get("relay", {})
         return jsonify({
             "camera": _cfg.get("camera", {}),
             "trap": _cfg.get("trap", {}),
@@ -449,6 +450,9 @@ def create_app(
                 "save_graph":          bool(pir_cfg.get("save_graph", False)),
                 "graph_pre_s":         pir_cfg.get("graph_pre_s", 30),
                 "graph_post_s":        pir_cfg.get("graph_post_s", 30),
+            },
+            "relay": {
+                "ir_on_pulse_ms": relay_cfg.get("ir_on_pulse_ms", 50),
             },
             "trap_enabled": gpio_manager.get_trap_enabled(),
             "nas": {
@@ -979,7 +983,7 @@ def create_app(
             pir["pulse_count"] = max(1, min(20, int(data["pulse_count"])))
             changed_pir = True
         if "pulse_window_s" in data:
-            pir["pulse_window_s"] = max(0.5, min(3.0, float(data["pulse_window_s"])))
+            pir["pulse_window_s"] = max(1.0, min(15.0, float(data["pulse_window_s"])))
             changed_pir = True
         if "poll_interval_ms" in data:
             pir["poll_interval_ms"] = max(10, min(500, int(data["poll_interval_ms"])))
@@ -994,6 +998,12 @@ def create_app(
             pir["graph_post_s"] = max(5, min(300, int(data["graph_post_s"])))
             changed_pir = True
         if changed_pir:
+            gpio_manager.update_config(_cfg)
+
+        # ── relay settings ───────────────────────────────────────────────────
+        relay = _cfg.setdefault("relay", {})
+        if "ir_on_pulse_ms" in data:
+            relay["ir_on_pulse_ms"] = max(20, min(1000, int(data["ir_on_pulse_ms"])))
             gpio_manager.update_config(_cfg)
 
         # ── NAS settings ─────────────────────────────────────────────────

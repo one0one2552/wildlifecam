@@ -514,13 +514,13 @@ class CameraManager:
             self._state = CameraState.RECORDING
             self._last_pir_time = time.monotonic()
             self._recording_trigger_time = self._last_pir_time  # for PIR graph
-            if self._relay_callback:
-                try:
-                    self._relay_callback(True)
-                except Exception:
-                    logger.exception("Failed to turn relay ON at recording start")
 
         threading.Thread(target=self._recording_worker, daemon=True).start()
+
+    def is_recording(self) -> bool:
+        """Return True while a PIR-triggered recording is in progress."""
+        with self._lock:
+            return self._state == CameraState.RECORDING
 
     def apply_controls(self, controls: dict) -> None:
         """Apply a dict of libcamera controls to the running camera."""

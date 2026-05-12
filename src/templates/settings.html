@@ -175,11 +175,19 @@
       <div>
         <label>Zeitfenster für Pulse (s)</label>
         <div style="display:flex; align-items:center; gap:.5rem">
-          <input type="range" name="pulse_window_s" id="pulseWindowS" min="0.5" max="3" step="0.1" value="1"
-                 oninput="document.getElementById('pulseWindowVal').textContent=parseFloat(this.value).toFixed(1)+' s'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
-          <span id="pulseWindowVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">1.0 s</span>
+          <input type="range" name="pulse_window_s" id="pulseWindowS" min="1" max="15" step="1" value="1"
+                 oninput="document.getElementById('pulseWindowVal').textContent=parseFloat(this.value).toFixed(0)+' s'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="pulseWindowVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">1 s</span>
         </div>
-        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Zeitfenster, innerhalb dessen die Pulse gezählt werden. Nur relevant wenn Pulse &gt; 1.</p>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Zeitfenster, innerhalb dessen die Pulse gezählt werden (1–15 s). Auch Abschaltzeit für das IR-LED ohne Aufnahme.</p>
+      </div>      <div>
+        <label>IR-LED einschalten ab Pulsdauer (ms)</label>
+        <div style="display:flex; align-items:center; gap:.5rem">
+          <input type="range" name="ir_on_pulse_ms" id="irOnPulseMs" min="20" max="1000" step="10" value="50"
+                 oninput="document.getElementById('irOnPulseVal').textContent=this.value+' ms'" style="flex:1; cursor:pointer; accent-color:var(--cta)">
+          <span id="irOnPulseVal" style="min-width:4rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">50 ms</span>
+        </div>
+        <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">IR-LED wird eingeschaltet sobald ein PIR-Puls mindestens diese Dauer hat (20–1000 ms).</p>
       </div>      <div>
         <label>Abtastrate PIR-Eingang (ms)</label>
         <div style="display:flex; align-items:center; gap:.5rem">
@@ -591,7 +599,7 @@ function toggleAutoRefresh() {
 async function loadTrapSettings() {
   const r = await fetch('/api/settings');
   if (!r.ok) return;
-  const { trap = {}, pir = {} } = await r.json();
+  const { trap = {}, pir = {}, relay = {} } = await r.json();
   if (trap.pre_event_seconds != null) {
     document.getElementById('preEvent').value = trap.pre_event_seconds;
     document.getElementById('preVal').textContent = trap.pre_event_seconds;
@@ -612,7 +620,7 @@ async function loadTrapSettings() {
   if (pir.pulse_count != null) document.getElementById('pulseCount').value = pir.pulse_count;
   if (pir.pulse_window_s != null) {
     document.getElementById('pulseWindowS').value = pir.pulse_window_s;
-    document.getElementById('pulseWindowVal').textContent = parseFloat(pir.pulse_window_s).toFixed(1) + ' s';
+    document.getElementById('pulseWindowVal').textContent = parseInt(pir.pulse_window_s) + ' s';
   }
   if (pir.poll_interval_ms != null) {
     const ms = pir.poll_interval_ms;
@@ -628,6 +636,11 @@ async function loadTrapSettings() {
     document.getElementById('graphPostVal').textContent = pir.graph_post_s + ' s';
   }
   if (pir.save_graph != null) document.getElementById('saveGraph').checked = !!pir.save_graph;
+  // relay settings loaded from same response
+  if (relay.ir_on_pulse_ms != null) {
+    document.getElementById('irOnPulseMs').value = relay.ir_on_pulse_ms;
+    document.getElementById('irOnPulseVal').textContent = relay.ir_on_pulse_ms + ' ms';
+  }
 }
 
 document.getElementById('trapForm').addEventListener('submit', async e => {
@@ -649,11 +662,12 @@ document.getElementById('pirForm').addEventListener('submit', async e => {
     min_pulse_ms: parseFloat(document.getElementById('minPulseMs').value),
     pulse_window_min_ms: parseFloat(document.getElementById('pulseWindowMinMs').value),
     pulse_count: parseInt(document.getElementById('pulseCount').value),
-    pulse_window_s: parseFloat(document.getElementById('pulseWindowS').value),
+    pulse_window_s: parseInt(document.getElementById('pulseWindowS').value),
     poll_interval_ms: parseInt(document.getElementById('pollIntervalMs').value),
     save_graph: document.getElementById('saveGraph').checked,
     graph_pre_s: parseInt(document.getElementById('graphPreS').value),
     graph_post_s: parseInt(document.getElementById('graphPostS').value),
+    ir_on_pulse_ms: parseInt(document.getElementById('irOnPulseMs').value),
   };
   const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';

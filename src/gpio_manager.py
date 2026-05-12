@@ -65,6 +65,12 @@ class GPIOManager:
         self._pulse_window_s: float = float(pir_cfg.get("pulse_window_s", 5.0))
         # Poll interval (hot-reloadable); clamped 10–500 ms
         self._poll_interval: float = max(0.01, min(0.5, float(pir_cfg.get("poll_interval_ms", 50)) / 1000.0))
+        # IR LED: turn on when a pulse >= this threshold is seen (20-1000ms)
+        self._ir_on_pulse_ms: float = max(20.0, min(1000.0, float(relay_cfg.get("ir_on_pulse_ms", 50.0))))
+        # Timestamp of last pulse that switched the IR LED on (for auto-off logic)
+        self._ir_last_on_ts: float = 0.0
+        # Callback injected by main.py so gpio_manager can check if a recording is running
+        self._is_recording_cb: Optional[Callable[[], bool]] = None
 
         self._on_motion = on_motion
         self._relay_state = False
@@ -155,12 +161,14 @@ class GPIOManager:
     def update_config(self, config: dict) -> None:
         """Hot-reload PIR trigger settings from the current config."""
         pir_cfg = config.get("pir", {})
+        relay_cfg = config.get("relay", {})
         with self._lock:
             self._min_pulse_ms = float(pir_cfg.get("min_pulse_ms", 100))
             self._pulse_window_min_ms = float(pir_cfg.get("pulse_window_min_ms", 50.0))
             self._pulse_count = max(1, int(pir_cfg.get("pulse_count", 1)))
             self._pulse_window_s = float(pir_cfg.get("pulse_window_s", 5.0))
             self._poll_interval = max(0.01, min(0.5, float(pir_cfg.get("poll_interval_ms", 50)) / 1000.0))
+            self._ir_on_pulse_ms = max(20.0, min(1000.0, float(relay_cfg.get("ir_on_pulse_ms", 50.0))))
             self._trap_enabled = bool(config.get("trap", {}).get("enabled", True))
 
     # ------------------------------------------------------------------ #
@@ -217,7 +225,15 @@ class GPIOManager:
                         debounce_ms = _PIR_DEBOUNCE_MS
                         pulse_count_needed = self._pulse_count
                         pulse_window = self._pulse_window_s
+                        ir_on_ms = self._ir_on_pulse_ms
                         trap_on = self._trap_enabled
+
+                    # IR LED: turn on as soon as pulse meets the ir_on_pulse_ms threshold
+                    if pulse_duration_ms >= ir_on_ms:
+                        if not self._relay_state:
+                            self._write_relay(True)
+                            logger.info("IR LED ON — pulse %.0f ms >= %.0f ms", pulse_duration_ms, ir_on_ms)
+                        self._ir_last_on_ts = now
 
                     elapsed_since_last = (now - self._last_trigger_ts) * 1000
 
@@ -279,6 +295,17 @@ class GPIOManager:
                         )
 
                 last_val = val
+
+                # Auto-off: turn IR LED off if window has elapsed and no recording active
+                if self._relay_state and self._ir_last_on_ts > 0:
+                    with self._lock:
+                        window = self._pulse_window_s
+                    elapsed_ir = now - self._ir_last_on_ts
+                    recording_active = bool(self._is_recording_cb and self._is_recording_cb())
+                    if elapsed_ir >= window and not recording_active:
+                        self._write_relay(False)
+                        logger.info("IR LED OFF — window %.1fs elapsed, no recording", window)
+
             except Exception:
                 logger.exception("PIR poll error")
             time.sleep(self._poll_interval)
