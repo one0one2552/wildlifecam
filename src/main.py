@@ -77,6 +77,8 @@ def main() -> None:
 
     # Auto-control IR LED relay during PIR-triggered recordings
     cam_mgr._relay_callback = gpio_mgr.set_relay
+    # Provide PIR history to camera_manager for graph generation
+    cam_mgr._pir_history_cb = gpio_mgr.get_pir_history
 
     from network_manager import NetworkManager
     net_mgr = NetworkManager(config)

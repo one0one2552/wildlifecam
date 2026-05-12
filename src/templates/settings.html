@@ -180,8 +180,13 @@
           <span id="pulseWindowVal" style="min-width:3.5rem; text-align:right; font-size:.82rem; color:var(--cta); font-family:'JetBrains Mono',monospace; font-weight:500">1.0 s</span>
         </div>
         <p style="font-size:.75rem; color:var(--muted); margin-top:.3rem">Zeitfenster, innerhalb dessen die Pulse gezählt werden. Nur relevant wenn Pulse &gt; 1.</p>
-      </div>
-    </div>
+      </div>      <div style="grid-column:span 2">
+        <label style="display:flex; align-items:center; gap:.6rem; cursor:pointer; font-size:.9rem; margin-bottom:.2rem">
+          <input type="checkbox" name="save_graph" id="saveGraph">
+          PIR-Graph mit jeder Aufnahme speichern (JPEG)
+        </label>
+        <p style="font-size:.75rem; color:var(--muted)">Speichert ein Diagramm des PIR-Signals als <code>.jpg</code> mit dem gleichen Dateinamen wie die MP4-Aufnahme.</p>
+      </div>    </div>
     <div style="margin-top:1rem; display:flex; gap:.8rem; align-items:center">
       <button type="submit" class="btn btn-primary">Speichern</button>
       <span id="pirFeedback" style="color:var(--green); font-size:.85rem"></span>
@@ -582,6 +587,7 @@ async function loadTrapSettings() {
     document.getElementById('pulseWindowS').value = pir.pulse_window_s;
     document.getElementById('pulseWindowVal').textContent = parseFloat(pir.pulse_window_s).toFixed(1) + ' s';
   }
+  if (pir.save_graph != null) document.getElementById('saveGraph').checked = !!pir.save_graph;
 }
 
 document.getElementById('trapForm').addEventListener('submit', async e => {
@@ -604,6 +610,7 @@ document.getElementById('pirForm').addEventListener('submit', async e => {
     pulse_window_min_ms: parseFloat(document.getElementById('pulseWindowMinMs').value),
     pulse_count: parseInt(document.getElementById('pulseCount').value),
     pulse_window_s: parseFloat(document.getElementById('pulseWindowS').value),
+    save_graph: document.getElementById('saveGraph').checked,
   };
   const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   fb.textContent = r.ok ? '✓ Gespeichert' : '✗ Fehler';

@@ -71,6 +71,68 @@ logger = logging.getLogger(__name__)
 JPEG_QUALITY_DEFAULT = 85
 
 
+def _save_pir_graph(
+    recording_path: Path,
+    pir_log: list,
+    trigger_time: float,
+    pre_event_seconds: float,
+) -> None:
+    """Generate a step-plot of the PIR signal and save it as a JPEG alongside the recording.
+
+    The X axis is time relative to the trigger moment (negative = pre-event).
+    """
+    try:
+        import matplotlib
+        matplotlib.use("Agg")          # headless — no display needed
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as ticker
+    except ImportError:
+        logger.warning("matplotlib not available — skipping PIR graph")
+        return
+
+    if not pir_log:
+        logger.debug("PIR log empty — skipping graph")
+        return
+
+    times  = [t - trigger_time for t, _ in pir_log]
+    values = [v for _, v in pir_log]
+
+    fig, ax = plt.subplots(figsize=(10, 2.8))
+    fig.patch.set_facecolor("#0A2540")
+    ax.set_facecolor("#0A2540")
+
+    ax.step(times, values, where="post", color="#00E5FF", linewidth=1.5)
+    ax.fill_between(times, values, step="post", alpha=0.25, color="#00E5FF")
+
+    # Trigger marker
+    ax.axvline(0, color="#FF4444", linewidth=1.2, linestyle="--", label="Trigger")
+
+    # Pre-event shading
+    ax.axvspan(times[0], -pre_event_seconds, alpha=0.08, color="#FFFFFF",
+               label=f"Pre-event ({pre_event_seconds:.0f}s)")
+
+    ax.set_xlim(times[0], times[-1])
+    ax.set_ylim(-0.05, 1.15)
+    ax.set_yticks([0, 1])
+    ax.set_yticklabels(["LOW", "HIGH"], color="#A8D8FF", fontsize=8)
+    ax.set_xlabel("Zeit relativ zu Auslösung (s)", color="#A8D8FF", fontsize=8)
+    ax.tick_params(colors="#A8D8FF", labelsize=7)
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#2A4560")
+
+    ts_str = recording_path.stem.replace("_pir", "").replace("_", " ")
+    ax.set_title(f"PIR-Signal — {ts_str}", color="#FFFFFF", fontsize=9, pad=6)
+    ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
+    ax.grid(True, which="both", color="#2A4560", linewidth=0.5)
+    ax.legend(fontsize=7, framealpha=0.2, labelcolor="#A8D8FF")
+
+    graph_path = recording_path.with_suffix(".jpg")
+    fig.savefig(str(graph_path), dpi=100, bbox_inches="tight",
+                facecolor=fig.get_facecolor())
+    plt.close(fig)
+    logger.info("PIR graph saved: %s", graph_path)
+
+
 class CameraState(Enum):
     TRAP = auto()
     LIVE = auto()
@@ -118,6 +180,8 @@ class CameraManager:
         self._config = config
         self._on_pir_trigger = on_pir_trigger
         self._relay_callback: Optional[Callable[[bool], None]] = None
+        # Injected by main.py after both managers are constructed
+        self._pir_history_cb: Optional[Callable[[float], list]] = None
         self._lock = threading.Lock()
         self._state = CameraState.STOPPING
         self._cam: Optional[Picamera2] = None
@@ -163,6 +227,11 @@ class CameraManager:
 
         # HDR state for sensor-level toggling (IMX708 / Camera Module 3)
         self._hdr_enabled: bool = bool(cam_cfg.get("hdr", False))
+
+        # PIR graph feature
+        self._pir_graph_enabled: bool = bool(
+            cfg.get("pir", {}).get("save_graph", False)
+        )
 
         self._transform = Transform(
             hflip=bool(cam_cfg.get("hflip", False)),
@@ -433,6 +502,7 @@ class CameraManager:
                 return
             self._state = CameraState.RECORDING
             self._last_pir_time = time.monotonic()
+            self._recording_trigger_time = self._last_pir_time  # for PIR graph
             if self._relay_callback:
                 try:
                     self._relay_callback(True)
@@ -651,6 +721,19 @@ class CameraManager:
                                result.stderr.decode(errors="replace")[:300])
 
             logger.info("Recording saved: %s", out_path)
+
+            # Generate PIR graph if enabled
+            if self._pir_graph_enabled and self._pir_history_cb:
+                try:
+                    trigger_time = getattr(self, "_recording_trigger_time", None)
+                    if trigger_time is not None:
+                        history_since = trigger_time - self.PRE_EVENT_SECONDS - 1.0
+                        pir_log = self._pir_history_cb(history_since)
+                        _save_pir_graph(
+                            out_path, pir_log, trigger_time, self.PRE_EVENT_SECONDS
+                        )
+                except Exception:
+                    logger.exception("PIR graph generation failed (non-fatal)")
 
             if self._on_pir_trigger:
                 self._on_pir_trigger(str(out_path))

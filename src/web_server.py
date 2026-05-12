@@ -441,10 +441,11 @@ def create_app(
             "camera": _cfg.get("camera", {}),
             "trap": _cfg.get("trap", {}),
             "pir": {
-                "min_pulse_ms":       pir_cfg.get("min_pulse_ms", 100),
+                "min_pulse_ms":        pir_cfg.get("min_pulse_ms", 100),
                 "pulse_window_min_ms": pir_cfg.get("pulse_window_min_ms", 50.0),
-                "pulse_count":        pir_cfg.get("pulse_count", 1),
-                "pulse_window_s":     pir_cfg.get("pulse_window_s", 5.0),
+                "pulse_count":         pir_cfg.get("pulse_count", 1),
+                "pulse_window_s":      pir_cfg.get("pulse_window_s", 5.0),
+                "save_graph":          bool(pir_cfg.get("save_graph", False)),
             },
             "trap_enabled": gpio_manager.get_trap_enabled(),
             "nas": {
@@ -976,6 +977,9 @@ def create_app(
             changed_pir = True
         if "pulse_window_s" in data:
             pir["pulse_window_s"] = max(0.5, min(3.0, float(data["pulse_window_s"])))
+            changed_pir = True
+        if "save_graph" in data:
+            pir["save_graph"] = bool(data["save_graph"])
             changed_pir = True
         if changed_pir:
             gpio_manager.update_config(_cfg)

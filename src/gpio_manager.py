@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
 from typing import Callable, Optional
 
 import lgpio
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 _GPIOCHIP = 0
 _PIR_DEBOUNCE_MS = 300       # ignore re-triggers within this window
 _POLL_INTERVAL = 0.05        # seconds between PIR polls
+_PIR_LOG_WINDOW_S = 120      # seconds of PIR history to retain
 
 
 class GPIOManager:
@@ -72,6 +74,10 @@ class GPIOManager:
         self._lock = threading.Lock()
         # Timestamps of qualifying pulses within the current window
         self._pulse_times: list = []
+        # Rolling PIR state log: deque of (monotonic_time, value) tuples.
+        # Keeps the last _PIR_LOG_WINDOW_S seconds for graph generation.
+        self._pir_log: deque = deque()
+        self._pir_log_lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -126,6 +132,15 @@ class GPIOManager:
             return False
         return bool(lgpio.gpio_read(self._handle, self._pir_pin))
 
+    def get_pir_history(self, since: float) -> list:
+        """Return [(monotonic_time, value), ...] samples recorded since *since*.
+
+        Used by the graph generator after a recording to plot the PIR signal
+        over the pre-event + event + post-event window.
+        """
+        with self._pir_log_lock:
+            return [(t, v) for t, v in self._pir_log if t >= since]
+
     def set_trap_enabled(self, enabled: bool) -> None:
         """Enable or disable the trap (PIR → recording trigger)."""
         with self._lock:
@@ -175,6 +190,13 @@ class GPIOManager:
                     break
                 val = lgpio.gpio_read(self._handle, self._pir_pin)
                 now = time.monotonic()
+
+                # Append to rolling PIR log, pruning old samples
+                with self._pir_log_lock:
+                    self._pir_log.append((now, val))
+                    cutoff = now - _PIR_LOG_WINDOW_S
+                    while self._pir_log and self._pir_log[0][0] < cutoff:
+                        self._pir_log.popleft()
 
                 if val == 1 and last_val == 0:
                     # Rising edge — start measuring pulse duration

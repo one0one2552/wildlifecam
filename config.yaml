@@ -32,11 +32,12 @@ live:
   watchdog_seconds: 180
 pir:
   gpio_pin: 17
-  min_pulse_ms: 200.0
+  min_pulse_ms: 100.0
   pull_down: true
-  pulse_count: 4
-  pulse_window_min_ms: 45.0
-  pulse_window_s: 1.2
+  pulse_count: 3
+  pulse_window_min_ms: 20.0
+  pulse_window_s: 0.8
+  save_graph: false
 power_saving:
   bluetooth_off: true
   hdmi_off: true
