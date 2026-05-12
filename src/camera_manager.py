@@ -78,8 +78,9 @@ def _save_pir_graph(
     pre_event_seconds: float,
     graph_pre_s: float = 30.0,
     graph_post_s: float = 30.0,
+    relay_log: list | None = None,
 ) -> None:
-    """Generate a step-plot of the PIR signal and save it as a JPEG alongside the recording.
+    """Generate a two-panel step-plot (PIR + IR-LED) and save it as a JPEG.
 
     The X axis is time relative to the trigger moment (negative = pre-event).
     graph_pre_s / graph_post_s control how much of the log is shown on each side.
@@ -97,44 +98,102 @@ def _save_pir_graph(
         logger.debug("PIR log empty — skipping graph")
         return
 
-    # Clip data to the requested display window
     win_start = trigger_time - graph_pre_s
     win_end   = trigger_time + graph_post_s
-    clipped = [(t, v) for t, v in pir_log if win_start <= t <= win_end]
-    if not clipped:
-        clipped = pir_log  # fall back to full log if window is empty
-    times  = [t - trigger_time for t, _ in clipped]
-    values = [v for _, v in clipped]
 
-    fig, ax = plt.subplots(figsize=(17.5, 4.9))
-    fig.patch.set_facecolor("#0A2540")
-    ax.set_facecolor("#0A2540")
+    def _clip_and_rel(log: list) -> tuple[list, list]:
+        """Clip log to display window and convert to relative times."""
+        clipped = [(t, v) for t, v in log if win_start <= t <= win_end]
+        if not clipped and log:
+            clipped = [(log[0][0], log[0][1])]  # single sentinel so plot still renders
+        t_rel = [t - trigger_time for t, _ in clipped]
+        vals  = [v for _, v in clipped]
+        return t_rel, vals
 
-    ax.step(times, values, where="post", color="#00E5FF", linewidth=1.5)
-    ax.fill_between(times, values, step="post", alpha=0.25, color="#00E5FF")
+    pir_t, pir_v = _clip_and_rel(pir_log)
+    relay_t, relay_v = _clip_and_rel(relay_log) if relay_log else ([], [])
 
-    # Trigger marker
-    ax.axvline(0, color="#FF4444", linewidth=1.2, linestyle="--", label="Trigger")
+    # Determine major/minor tick spacing based on total window width
+    total_s = graph_pre_s + graph_post_s
+    if total_s <= 30:
+        major_s, minor_s = 5, 1
+    elif total_s <= 60:
+        major_s, minor_s = 10, 2
+    elif total_s <= 120:
+        major_s, minor_s = 20, 5
+    else:
+        major_s, minor_s = 30, 5
 
-    # Pre-event shading
-    shade_start = max(times[0], -graph_pre_s)
-    ax.axvspan(shade_start, -pre_event_seconds, alpha=0.08, color="#FFFFFF",
-               label=f"Pre-event ({pre_event_seconds:.0f}s)")
+    BG       = "#0A2540"
+    CLR_PIR  = "#00E5FF"
+    CLR_IRLED = "#FFB300"
+    CLR_TXT  = "#A8D8FF"
+    CLR_GRID = "#1A3550"
+    CLR_TRIG = "#FF4444"
 
-    ax.set_xlim(-graph_pre_s, graph_post_s)
-    ax.set_ylim(-0.05, 1.15)
-    ax.set_yticks([0, 1])
-    ax.set_yticklabels(["LOW", "HIGH"], color="#A8D8FF", fontsize=8)
-    ax.set_xlabel("Zeit relativ zu Auslösung (s)", color="#A8D8FF", fontsize=8)
-    ax.tick_params(colors="#A8D8FF", labelsize=7)
-    for spine in ax.spines.values():
-        spine.set_edgecolor("#2A4560")
+    has_relay = bool(relay_t)
+    n_panels  = 2 if has_relay else 1
+    # Height ratios: PIR 2×, IR-LED 1× (only when relay data present)
+    height_ratios = [2, 1] if has_relay else [1]
+    fig, axes = plt.subplots(
+        n_panels, 1, figsize=(17.5, 5.5 if has_relay else 4.0),
+        gridspec_kw={"height_ratios": height_ratios, "hspace": 0.08},
+        sharex=True,
+    )
+    if n_panels == 1:
+        axes = [axes]
 
+    fig.patch.set_facecolor(BG)
     ts_str = recording_path.stem.replace("_pir", "").replace("_", " ")
-    ax.set_title(f"PIR-Signal — {ts_str}", color="#FFFFFF", fontsize=9, pad=6)
-    ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
-    ax.grid(True, which="both", color="#2A4560", linewidth=0.5)
-    ax.legend(fontsize=7, framealpha=0.2, labelcolor="#A8D8FF")
+    fig.suptitle(f"PIR / IR-LED — {ts_str}", color="#FFFFFF", fontsize=9, y=0.98)
+
+    # ---- PIR panel ----
+    ax_pir = axes[0]
+    ax_pir.set_facecolor(BG)
+    if pir_t:
+        ax_pir.step(pir_t, pir_v, where="post", color=CLR_PIR, linewidth=1.5)
+        ax_pir.fill_between(pir_t, pir_v, step="post", alpha=0.25, color=CLR_PIR)
+    ax_pir.axvline(0, color=CLR_TRIG, linewidth=1.2, linestyle="--", label="Trigger")
+    if pir_t:
+        shade_start = max(pir_t[0], -graph_pre_s)
+        ax_pir.axvspan(shade_start, -pre_event_seconds, alpha=0.08, color="#FFFFFF",
+                       label=f"Pre-event ({pre_event_seconds:.0f}s)")
+    ax_pir.set_xlim(-graph_pre_s, graph_post_s)
+    ax_pir.set_ylim(-0.05, 1.15)
+    ax_pir.set_yticks([0, 1])
+    ax_pir.set_yticklabels(["LOW", "HIGH"], color=CLR_TXT, fontsize=8)
+    ax_pir.set_ylabel("PIR", color=CLR_TXT, fontsize=8)
+    ax_pir.tick_params(colors=CLR_TXT, labelsize=7, which="both")
+    for spine in ax_pir.spines.values():
+        spine.set_edgecolor(CLR_GRID)
+    ax_pir.xaxis.set_major_locator(ticker.MultipleLocator(major_s))
+    ax_pir.xaxis.set_minor_locator(ticker.MultipleLocator(minor_s))
+    ax_pir.grid(True, which="major", color=CLR_GRID, linewidth=0.6)
+    ax_pir.grid(True, which="minor", color=CLR_GRID, linewidth=0.3, linestyle=":")
+    ax_pir.legend(fontsize=7, framealpha=0.2, labelcolor=CLR_TXT)
+
+    # ---- IR-LED panel (only when relay data present) ----
+    if has_relay:
+        ax_ir = axes[1]
+        ax_ir.set_facecolor(BG)
+        ax_ir.step(relay_t, relay_v, where="post", color=CLR_IRLED, linewidth=1.5)
+        ax_ir.fill_between(relay_t, relay_v, step="post", alpha=0.30, color=CLR_IRLED)
+        ax_ir.axvline(0, color=CLR_TRIG, linewidth=1.2, linestyle="--")
+        ax_ir.set_xlim(-graph_pre_s, graph_post_s)
+        ax_ir.set_ylim(-0.05, 1.15)
+        ax_ir.set_yticks([0, 1])
+        ax_ir.set_yticklabels(["AUS", "AN"], color=CLR_IRLED, fontsize=8)
+        ax_ir.set_ylabel("IR-LED", color=CLR_IRLED, fontsize=8)
+        ax_ir.set_xlabel("Zeit relativ zu Auslösung (s)", color=CLR_TXT, fontsize=8)
+        ax_ir.tick_params(colors=CLR_TXT, labelsize=7, which="both")
+        for spine in ax_ir.spines.values():
+            spine.set_edgecolor(CLR_GRID)
+        ax_ir.xaxis.set_major_locator(ticker.MultipleLocator(major_s))
+        ax_ir.xaxis.set_minor_locator(ticker.MultipleLocator(minor_s))
+        ax_ir.grid(True, which="major", color=CLR_GRID, linewidth=0.6)
+        ax_ir.grid(True, which="minor", color=CLR_GRID, linewidth=0.3, linestyle=":")
+    else:
+        axes[0].set_xlabel("Zeit relativ zu Auslösung (s)", color=CLR_TXT, fontsize=8)
 
     graph_path = recording_path.with_suffix(".jpg")
     fig.savefig(str(graph_path), dpi=100, bbox_inches="tight",
@@ -192,6 +251,7 @@ class CameraManager:
         self._relay_callback: Optional[Callable[[bool], None]] = None
         # Injected by main.py after both managers are constructed
         self._pir_history_cb: Optional[Callable[[float], list]] = None
+        self._relay_history_cb: Optional[Callable[[float], list]] = None
         self._lock = threading.Lock()
         self._state = CameraState.STOPPING
         self._cam: Optional[Picamera2] = None
@@ -740,9 +800,11 @@ class CameraManager:
                     if trigger_time is not None:
                         history_since = trigger_time - max(self._graph_pre_s, self.PRE_EVENT_SECONDS) - 1.0
                         pir_log = self._pir_history_cb(history_since)
+                        relay_log = self._relay_history_cb(history_since) if self._relay_history_cb else []
                         _save_pir_graph(
                             out_path, pir_log, trigger_time, self.PRE_EVENT_SECONDS,
                             self._graph_pre_s, self._graph_post_s,
+                            relay_log=relay_log,
                         )
                 except Exception:
                     logger.exception("PIR graph generation failed (non-fatal)")

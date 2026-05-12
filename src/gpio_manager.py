@@ -86,6 +86,9 @@ class GPIOManager:
         # Keeps the last _PIR_LOG_WINDOW_S seconds for graph generation.
         self._pir_log: deque = deque()
         self._pir_log_lock = threading.Lock()
+        # Rolling relay (IR LED) state log: same format as _pir_log.
+        self._relay_log: deque = deque()
+        self._relay_log_lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -149,6 +152,11 @@ class GPIOManager:
         with self._pir_log_lock:
             return [(t, v) for t, v in self._pir_log if t >= since]
 
+    def get_relay_history(self, since: float) -> list:
+        """Return [(monotonic_time, value), ...] relay state changes since *since*."""
+        with self._relay_log_lock:
+            return [(t, v) for t, v in self._relay_log if t >= since]
+
     def set_trap_enabled(self, enabled: bool) -> None:
         """Enable or disable the trap (PIR → recording trigger)."""
         with self._lock:
@@ -181,6 +189,13 @@ class GPIOManager:
         level = (1 if state else 0) if self._relay_active_high else (0 if state else 1)
         lgpio.gpio_write(self._handle, self._relay_pin, level)
         self._relay_state = state
+        now = time.monotonic()
+        with self._relay_log_lock:
+            self._relay_log.append((now, 1 if state else 0))
+            # Trim log to _PIR_LOG_WINDOW_S
+            cutoff = now - _PIR_LOG_WINDOW_S
+            while self._relay_log and self._relay_log[0][0] < cutoff:
+                self._relay_log.popleft()
         logger.debug("Relay → %s", "ON" if state else "OFF")
 
     def _pir_poll_loop(self) -> None:
