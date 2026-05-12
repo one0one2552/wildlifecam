@@ -81,6 +81,10 @@ class StorageManager:
         if self._nas_enabled:
             self._upload_status[path.name] = "queued"
             self._executor.submit(self._upload_and_verify, path)
+            # Upload PIR graph sidecar JPEG if present
+            jpg_sidecar = path.with_suffix(".jpg")
+            if jpg_sidecar.exists():
+                self._executor.submit(self._upload_and_verify, jpg_sidecar)
         else:
             logger.info("NAS disabled — keeping local: %s", file_path)
 
