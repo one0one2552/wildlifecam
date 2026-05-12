@@ -69,8 +69,6 @@ class GPIOManager:
         self._ir_on_pulse_ms: float = max(20.0, min(1000.0, float(relay_cfg.get("ir_on_pulse_ms", 50.0))))
         # Timestamp of last pulse that switched the IR LED on (for auto-off logic)
         self._ir_last_on_ts: float = 0.0
-        # Callback injected by main.py so gpio_manager can check if a recording is running
-        self._is_recording_cb: Optional[Callable[[], bool]] = None
 
         self._on_motion = on_motion
         self._relay_state = False
@@ -97,6 +95,8 @@ class GPIOManager:
         self._pulse_width_log_lock = threading.Lock()
         # IR LED grace-period: monotonic time when conditions first cleared (0 = still active).
         self._ir_conditions_cleared_ts: float = 0.0
+        # Direct bool set by camera_manager — avoids lock contention from is_recording() callback.
+        self._recording_active: bool = False
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -174,6 +174,14 @@ class GPIOManager:
         """Return [(fall_time, duration_ms), ...] for each completed PIR pulse since *since*."""
         with self._pulse_width_log_lock:
             return [(t, d) for t, d in self._pulse_width_log if t >= since]
+
+    def recording_started(self) -> None:
+        """Called by camera_manager when a PIR-triggered recording begins."""
+        self._recording_active = True
+
+    def recording_stopped(self) -> None:
+        """Called by camera_manager when a PIR-triggered recording ends."""
+        self._recording_active = False
 
     def set_trap_enabled(self, enabled: bool) -> None:
         """Enable or disable the trap (PIR → recording trigger)."""
@@ -350,7 +358,7 @@ class GPIOManager:
                 with self._lock:
                     _pw_s = self._pulse_window_s
                 _window_active = (self._ir_last_on_ts > 0) and (now - self._ir_last_on_ts < _pw_s)
-                _rec_active = bool(self._is_recording_cb and self._is_recording_cb())
+                _rec_active = self._recording_active  # set directly by camera_manager, no lock needed
                 _want_on = _window_active or _rec_active
                 if _want_on:
                     self._ir_conditions_cleared_ts = 0.0

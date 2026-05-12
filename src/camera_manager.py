@@ -285,6 +285,9 @@ class CameraManager:
         self._config = config
         self._on_pir_trigger = on_pir_trigger
         self._relay_callback: Optional[Callable[[bool], None]] = None
+        # Injected by main.py: notify gpio_manager of recording state changes (no lock contention)
+        self._recording_notify_start: Optional[Callable[[], None]] = None
+        self._recording_notify_stop: Optional[Callable[[], None]] = None
         # Injected by main.py after both managers are constructed
         self._pir_history_cb: Optional[Callable[[float], list]] = None
         self._relay_history_cb: Optional[Callable[[float], list]] = None
@@ -613,6 +616,11 @@ class CameraManager:
             self._last_pir_time = time.monotonic()
             self._recording_trigger_time = self._last_pir_time  # for PIR graph
 
+        if self._recording_notify_start:
+            try:
+                self._recording_notify_start()
+            except Exception:
+                logger.exception("recording_notify_start callback raised")
         threading.Thread(target=self._recording_worker, daemon=True).start()
 
     def is_recording(self) -> bool:
@@ -809,11 +817,12 @@ class CameraManager:
                     break
                 logger.debug("Recording active — %.1fs since last PIR (limit %ds)",
                              elapsed, self.POST_EVENT_SECONDS)
-            if self._relay_callback:
+            # Notify gpio_manager that recording has ended — it will handle IR LED auto-off
+            if self._recording_notify_stop:
                 try:
-                    self._relay_callback(False)
+                    self._recording_notify_stop()
                 except Exception:
-                    logger.exception("Failed to turn relay OFF at recording end")
+                    logger.exception("recording_notify_stop callback raised")
 
             size_kb = h264_path.stat().st_size / 1024
             logger.info("H264 flushed: %s (%.0f KB)", h264_path.name, size_kb)
