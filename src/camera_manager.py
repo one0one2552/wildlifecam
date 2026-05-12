@@ -79,6 +79,9 @@ def _save_pir_graph(
     graph_pre_s: float = 30.0,
     graph_post_s: float = 30.0,
     relay_log: list | None = None,
+    trigger_events: list | None = None,
+    pulse_widths: list | None = None,
+    recording_stop_time: float | None = None,
 ) -> None:
     """Generate a two-panel step-plot (PIR + IR-LED) and save it as a JPEG.
 
@@ -158,8 +161,41 @@ def _save_pir_graph(
         shade_start = max(pir_t[0], -graph_pre_s)
         ax_pir.axvspan(shade_start, -pre_event_seconds, alpha=0.08, color="#FFFFFF",
                        label=f"Pre-event ({pre_event_seconds:.0f}s)")
+
+    # ---- Recording span ----
+    CLR_REC = "#00FF88"
+    if recording_stop_time is not None and recording_stop_time > trigger_time:
+        stop_rel = min(recording_stop_time - trigger_time, graph_post_s)
+        ax_pir.axvspan(0, stop_rel, alpha=0.07, color=CLR_REC)
+        ax_pir.axvline(stop_rel, color=CLR_REC, linewidth=1.0, linestyle=":", label="Rec. Ende")
+
+    # ---- Trigger / re-trigger events ----
+    CLR_TRIG_EV = "#FFD700"
+    _te_labeled = False
+    for te in (trigger_events or []):
+        te_rel = te - trigger_time
+        if -graph_pre_s <= te_rel <= graph_post_s:
+            _lbl = "Ausl\u00f6sung" if not _te_labeled else None
+            ax_pir.axvline(te_rel, color=CLR_TRIG_EV, linewidth=1.0,
+                           linestyle="-.", alpha=0.8, label=_lbl)
+            _te_labeled = True
+
+    # ---- Pulse width annotations ----
+    for pw_time, pw_ms in (pulse_widths or []):
+        fall_rel  = pw_time - trigger_time
+        start_rel = fall_rel - pw_ms / 1000.0
+        center_rel = (start_rel + fall_rel) / 2.0
+        if -graph_pre_s <= center_rel <= graph_post_s:
+            ax_pir.annotate(
+                f"{pw_ms:.0f}ms",
+                xy=(center_rel, 1.08),
+                ha="center", va="bottom",
+                fontsize=5.5, color=CLR_TRIG_EV,
+                annotation_clip=True,
+            )
+
     ax_pir.set_xlim(-graph_pre_s, graph_post_s)
-    ax_pir.set_ylim(-0.05, 1.15)
+    ax_pir.set_ylim(-0.05, 1.22)
     ax_pir.set_yticks([0, 1])
     ax_pir.set_yticklabels(["LOW", "HIGH"], color=CLR_TXT, fontsize=8)
     ax_pir.set_ylabel("PIR", color=CLR_TXT, fontsize=8)
@@ -252,6 +288,8 @@ class CameraManager:
         # Injected by main.py after both managers are constructed
         self._pir_history_cb: Optional[Callable[[float], list]] = None
         self._relay_history_cb: Optional[Callable[[float], list]] = None
+        self._trigger_history_cb: Optional[Callable[[float], list]] = None
+        self._pulse_width_history_cb: Optional[Callable[[float], list]] = None
         self._lock = threading.Lock()
         self._state = CameraState.STOPPING
         self._cam: Optional[Picamera2] = None
@@ -752,6 +790,7 @@ class CameraManager:
             # The elapsed check and the stop decision are made atomically inside
             # the lock so that a concurrent trigger_recording() call cannot slip
             # in between the check and the circ_output.stop() transition.
+            recording_stop_time: float = 0.0
             _poll = 0.5
             while True:
                 time.sleep(_poll)
@@ -762,6 +801,7 @@ class CameraManager:
                     elapsed = time.monotonic() - self._last_pir_time
                     if elapsed >= self.POST_EVENT_SECONDS:
                         stop_now = True
+                        recording_stop_time = time.monotonic()
                         if self._cam:
                             self._circ_output.stop()
                         self._state = CameraState.TRAP
@@ -805,10 +845,15 @@ class CameraManager:
                         history_since = trigger_time - max(self._graph_pre_s, self.PRE_EVENT_SECONDS) - 1.0
                         pir_log = self._pir_history_cb(history_since)
                         relay_log = self._relay_history_cb(history_since) if self._relay_history_cb else []
+                        trigger_events = self._trigger_history_cb(history_since) if self._trigger_history_cb else []
+                        pulse_widths = self._pulse_width_history_cb(history_since) if self._pulse_width_history_cb else []
                         _save_pir_graph(
                             out_path, pir_log, trigger_time, self.PRE_EVENT_SECONDS,
                             self._graph_pre_s, self._graph_post_s,
                             relay_log=relay_log,
+                            trigger_events=trigger_events,
+                            pulse_widths=pulse_widths,
+                            recording_stop_time=recording_stop_time,
                         )
                 except Exception:
                     logger.exception("PIR graph generation failed (non-fatal)")

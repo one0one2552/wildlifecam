@@ -34,12 +34,12 @@ pir:
   gpio_pin: 17
   graph_post_s: 10
   graph_pre_s: 5
-  min_pulse_ms: 1330.0
+  min_pulse_ms: 1440.0
   poll_interval_ms: 10
   pull_down: true
   pulse_count: 3
   pulse_window_min_ms: 20.0
-  pulse_window_s: 3.0
+  pulse_window_s: 8.0
   save_graph: true
 power_saving:
   bluetooth_off: true
@@ -48,7 +48,7 @@ power_saving:
 relay:
   active_high: true
   gpio_pin: 18
-  ir_on_pulse_ms: 50
+  ir_on_pulse_ms: 200
 server:
   host: 0.0.0.0
   port: 8080

@@ -89,6 +89,14 @@ class GPIOManager:
         # Rolling relay (IR LED) state log: same format as _pir_log.
         self._relay_log: deque = deque()
         self._relay_log_lock = threading.Lock()
+        # Trigger event log: monotonic timestamps when _on_motion() fires.
+        self._trigger_event_log: deque = deque()
+        self._trigger_event_log_lock = threading.Lock()
+        # Pulse width log: (fall_time, duration_ms) for each completed PIR pulse.
+        self._pulse_width_log: deque = deque()
+        self._pulse_width_log_lock = threading.Lock()
+        # IR LED grace-period: monotonic time when conditions first cleared (0 = still active).
+        self._ir_conditions_cleared_ts: float = 0.0
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -156,6 +164,16 @@ class GPIOManager:
         """Return [(monotonic_time, value), ...] relay state changes since *since*."""
         with self._relay_log_lock:
             return [(t, v) for t, v in self._relay_log if t >= since]
+
+    def get_trigger_history(self, since: float) -> list:
+        """Return [monotonic_time, ...] of each _on_motion() fire since *since*."""
+        with self._trigger_event_log_lock:
+            return [t for t in self._trigger_event_log if t >= since]
+
+    def get_pulse_width_history(self, since: float) -> list:
+        """Return [(fall_time, duration_ms), ...] for each completed PIR pulse since *since*."""
+        with self._pulse_width_log_lock:
+            return [(t, d) for t, d in self._pulse_width_log if t >= since]
 
     def set_trap_enabled(self, enabled: bool) -> None:
         """Enable or disable the trap (PIR → recording trigger)."""
@@ -243,12 +261,17 @@ class GPIOManager:
                         ir_on_ms = self._ir_on_pulse_ms
                         trap_on = self._trap_enabled
 
-                    # IR LED: turn on as soon as pulse meets the ir_on_pulse_ms threshold
+                    # Log pulse width for graph annotation
+                    with self._pulse_width_log_lock:
+                        self._pulse_width_log.append((now, pulse_duration_ms))
+                        _pw_cutoff = now - _PIR_LOG_WINDOW_S
+                        while self._pulse_width_log and self._pulse_width_log[0][0] < _pw_cutoff:
+                            self._pulse_width_log.popleft()
+
+                    # IR LED: mark qualifying pulses; per-cycle logic manages actual relay.
                     if pulse_duration_ms >= ir_on_ms:
-                        if not self._relay_state:
-                            self._write_relay(True)
-                            logger.info("IR LED ON — pulse %.0f ms >= %.0f ms", pulse_duration_ms, ir_on_ms)
                         self._ir_last_on_ts = now
+                        logger.debug("IR LED qualifying pulse %.0f ms", pulse_duration_ms)
 
                     elapsed_since_last = (now - self._last_trigger_ts) * 1000
 
@@ -264,6 +287,11 @@ class GPIOManager:
                                 pulse_duration_ms, min_ms, self._pir_pin,
                             )
                             if trap_on and self._on_motion:
+                                with self._trigger_event_log_lock:
+                                    self._trigger_event_log.append(now)
+                                    _te_cutoff = now - _PIR_LOG_WINDOW_S
+                                    while self._trigger_event_log and self._trigger_event_log[0] < _te_cutoff:
+                                        self._trigger_event_log.popleft()
                                 try:
                                     self._on_motion()
                                 except Exception:
@@ -296,6 +324,11 @@ class GPIOManager:
                                     count, pulse_window, self._pir_pin,
                                 )
                                 if trap_on and self._on_motion:
+                                    with self._trigger_event_log_lock:
+                                        self._trigger_event_log.append(now)
+                                        _te_cutoff = now - _PIR_LOG_WINDOW_S
+                                        while self._trigger_event_log and self._trigger_event_log[0] < _te_cutoff:
+                                            self._trigger_event_log.popleft()
                                     try:
                                         self._on_motion()
                                     except Exception:
@@ -311,15 +344,26 @@ class GPIOManager:
 
                 last_val = val
 
-                # Auto-off: turn IR LED off if window has elapsed and no recording active
-                if self._relay_state and self._ir_last_on_ts > 0:
-                    with self._lock:
-                        window = self._pulse_window_s
-                    elapsed_ir = now - self._ir_last_on_ts
-                    recording_active = bool(self._is_recording_cb and self._is_recording_cb())
-                    if elapsed_ir >= window and not recording_active:
+                # Per-cycle IR LED management:
+                # ON while pulse_window active OR recording is running.
+                # OFF after 1s grace period once both conditions clear.
+                with self._lock:
+                    _pw_s = self._pulse_window_s
+                _window_active = (self._ir_last_on_ts > 0) and (now - self._ir_last_on_ts < _pw_s)
+                _rec_active = bool(self._is_recording_cb and self._is_recording_cb())
+                _want_on = _window_active or _rec_active
+                if _want_on:
+                    self._ir_conditions_cleared_ts = 0.0
+                    if not self._relay_state:
+                        self._write_relay(True)
+                        logger.info("IR LED ON (window=%s, rec=%s)", _window_active, _rec_active)
+                elif self._relay_state:
+                    if self._ir_conditions_cleared_ts == 0.0:
+                        self._ir_conditions_cleared_ts = now
+                    elif now - self._ir_conditions_cleared_ts >= 1.0:
                         self._write_relay(False)
-                        logger.info("IR LED OFF — window %.1fs elapsed, no recording", window)
+                        self._ir_conditions_cleared_ts = 0.0
+                        logger.info("IR LED OFF — 1s grace expired")
 
             except Exception:
                 logger.exception("PIR poll error")

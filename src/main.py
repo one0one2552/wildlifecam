@@ -80,8 +80,10 @@ def main() -> None:
     # Allow gpio_manager to check recording state for IR LED auto-off
     gpio_mgr._is_recording_cb = cam_mgr.is_recording
     # Provide PIR and relay history to camera_manager for graph generation
-    cam_mgr._pir_history_cb   = gpio_mgr.get_pir_history
-    cam_mgr._relay_history_cb = gpio_mgr.get_relay_history
+    cam_mgr._pir_history_cb          = gpio_mgr.get_pir_history
+    cam_mgr._relay_history_cb        = gpio_mgr.get_relay_history
+    cam_mgr._trigger_history_cb      = gpio_mgr.get_trigger_history
+    cam_mgr._pulse_width_history_cb  = gpio_mgr.get_pulse_width_history
 
     from network_manager import NetworkManager
     net_mgr = NetworkManager(config)
