@@ -80,6 +80,8 @@ def main() -> None:
     # Notify gpio_manager of recording state changes (direct bool, avoids lock contention)
     cam_mgr._recording_notify_start = gpio_mgr.recording_started
     cam_mgr._recording_notify_stop  = gpio_mgr.recording_stopped
+    # Every valid PIR pulse (>= T_VALID) extends the recording end time (Spec §3.2)
+    gpio_mgr._on_valid_pulse = cam_mgr.extend_recording
     # Provide PIR and relay history to camera_manager for graph generation
     cam_mgr._pir_history_cb          = gpio_mgr.get_pir_history
     cam_mgr._relay_history_cb        = gpio_mgr.get_relay_history

@@ -82,15 +82,17 @@ def _save_pir_graph(
     trigger_events: list | None = None,
     pulse_widths: list | None = None,
     recording_stop_time: float | None = None,
+    pulse_window_s: float = 0.0,
+    ir_on_pulse_ms: float = 0.0,
 ) -> None:
-    """Generate a two-panel step-plot (PIR + IR-LED) and save it as a JPEG.
+    """Two-panel graph (PIR + IR-LED) with T_WINDOW spans, trigger markers, pulse widths.
 
-    The X axis is time relative to the trigger moment (negative = pre-event).
-    graph_pre_s / graph_post_s control how much of the log is shown on each side.
+    pulse_window_s / ir_on_pulse_ms: used to draw T_WINDOW active spans — each qualifying
+    pulse (duration >= ir_on_pulse_ms) produces a span from its fall time to fall+T_WINDOW.
     """
     try:
         import matplotlib
-        matplotlib.use("Agg")          # headless — no display needed
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         import matplotlib.ticker as ticker
     except ImportError:
@@ -105,18 +107,28 @@ def _save_pir_graph(
     win_end   = trigger_time + graph_post_s
 
     def _clip_and_rel(log: list) -> tuple[list, list]:
-        """Clip log to display window and convert to relative times."""
         clipped = [(t, v) for t, v in log if win_start <= t <= win_end]
         if not clipped and log:
-            clipped = [(log[0][0], log[0][1])]  # single sentinel so plot still renders
-        t_rel = [t - trigger_time for t, _ in clipped]
-        vals  = [v for _, v in clipped]
-        return t_rel, vals
+            clipped = [(log[0][0], log[0][1])]
+        return [t - trigger_time for t, _ in clipped], [v for _, v in clipped]
 
     pir_t, pir_v = _clip_and_rel(pir_log)
     relay_t, relay_v = _clip_and_rel(relay_log) if relay_log else ([], [])
 
-    # Determine major/minor tick spacing based on total window width
+    # T_WINDOW spans: each qualifying pulse (>= ir_on_pulse_ms) arms the LED for pulse_window_s
+    window_spans: list[tuple[float, float]] = []  # (start_rel, end_rel)
+    if pulse_window_s > 0 and ir_on_pulse_ms > 0:
+        for pw_time, pw_ms in (pulse_widths or []):
+            if pw_ms >= ir_on_pulse_ms:
+                span_start = pw_time - trigger_time
+                span_end   = span_start + pulse_window_s
+                if span_end >= -graph_pre_s and span_start <= graph_post_s:
+                    window_spans.append((
+                        max(span_start, -graph_pre_s),
+                        min(span_end,   graph_post_s),
+                    ))
+
+    # Tick spacing
     total_s = graph_pre_s + graph_post_s
     if total_s <= 30:
         major_s, minor_s = 5, 1
@@ -127,107 +139,128 @@ def _save_pir_graph(
     else:
         major_s, minor_s = 30, 5
 
-    BG       = "#0A2540"
-    CLR_PIR  = "#00E5FF"
+    BG        = "#0A2540"
+    CLR_PIR   = "#00E5FF"
     CLR_IRLED = "#FFB300"
-    CLR_TXT  = "#A8D8FF"
-    CLR_GRID = "#1A3550"
-    CLR_TRIG = "#FF4444"
+    CLR_WIN   = "#FF8C00"   # T_WINDOW spans (amber-orange)
+    CLR_REC   = "#00FF88"   # recording span (green)
+    CLR_TXT   = "#A8D8FF"
+    CLR_GRID  = "#1A3550"
+    CLR_TRIG  = "#FF4444"
+    CLR_EV    = "#FFD700"   # trigger/re-trigger events
 
     has_relay = bool(relay_t)
-    n_panels  = 2 if has_relay else 1
-    # Height ratios: PIR 2×, IR-LED 1× (only when relay data present)
     height_ratios = [2, 1] if has_relay else [1]
     fig, axes = plt.subplots(
-        n_panels, 1, figsize=(17.5, 5.5 if has_relay else 4.0),
+        2 if has_relay else 1, 1,
+        figsize=(17.5, 5.5 if has_relay else 4.0),
         gridspec_kw={"height_ratios": height_ratios, "hspace": 0.08},
         sharex=True,
     )
-    if n_panels == 1:
+    if not has_relay:
         axes = [axes]
 
     fig.patch.set_facecolor(BG)
     ts_str = recording_path.stem.replace("_pir", "").replace("_", " ")
     fig.suptitle(f"PIR / IR-LED — {ts_str}", color="#FFFFFF", fontsize=9, y=0.98)
 
-    # ---- PIR panel ----
+    def _style_ax(ax, ylabel, ylabel_color=None):
+        ax.set_facecolor(BG)
+        ax.set_xlim(-graph_pre_s, graph_post_s)
+        ax.tick_params(colors=CLR_TXT, labelsize=7, which="both")
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(major_s))
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(minor_s))
+        ax.grid(True, which="major", color=CLR_GRID, linewidth=0.6)
+        ax.grid(True, which="minor", color=CLR_GRID, linewidth=0.3, linestyle=":")
+        for spine in ax.spines.values():
+            spine.set_edgecolor(CLR_GRID)
+        ax.set_ylabel(ylabel, color=ylabel_color or CLR_TXT, fontsize=8)
+
+    # ── PIR panel ──────────────────────────────────────────────────────
     ax_pir = axes[0]
-    ax_pir.set_facecolor(BG)
-    if pir_t:
-        ax_pir.step(pir_t, pir_v, where="post", color=CLR_PIR, linewidth=1.5)
-        ax_pir.fill_between(pir_t, pir_v, step="post", alpha=0.25, color=CLR_PIR)
-    ax_pir.axvline(0, color=CLR_TRIG, linewidth=1.2, linestyle="--", label="Trigger")
+    _style_ax(ax_pir, "PIR")
+
+    # T_WINDOW spans (behind everything)
+    _win_labeled = False
+    for ws, we in window_spans:
+        _lbl = f"T_WINDOW ({pulse_window_s:.0f}s)" if not _win_labeled else None
+        ax_pir.axvspan(ws, we, alpha=0.12, color=CLR_WIN, label=_lbl, zorder=1)
+        _win_labeled = True
+
+    # Pre-event shading
     if pir_t:
         shade_start = max(pir_t[0], -graph_pre_s)
         ax_pir.axvspan(shade_start, -pre_event_seconds, alpha=0.08, color="#FFFFFF",
-                       label=f"Pre-event ({pre_event_seconds:.0f}s)")
+                       label=f"Pre-event ({pre_event_seconds:.0f}s)", zorder=1)
 
-    # ---- Recording span ----
-    CLR_REC = "#00FF88"
+    # Recording span
     if recording_stop_time is not None and recording_stop_time > trigger_time:
         stop_rel = min(recording_stop_time - trigger_time, graph_post_s)
-        ax_pir.axvspan(0, stop_rel, alpha=0.07, color=CLR_REC)
-        ax_pir.axvline(stop_rel, color=CLR_REC, linewidth=1.0, linestyle=":", label="Rec. Ende")
+        ax_pir.axvspan(0, stop_rel, alpha=0.07, color=CLR_REC, zorder=1)
+        ax_pir.axvline(stop_rel, color=CLR_REC, linewidth=1.0, linestyle=":", label="Rec. Ende", zorder=3)
 
-    # ---- Trigger / re-trigger events ----
-    CLR_TRIG_EV = "#FFD700"
+    # PIR signal
+    if pir_t:
+        ax_pir.step(pir_t, pir_v, where="post", color=CLR_PIR, linewidth=1.5, zorder=4)
+        ax_pir.fill_between(pir_t, pir_v, step="post", alpha=0.25, color=CLR_PIR, zorder=3)
+
+    # Trigger vline
+    ax_pir.axvline(0, color=CLR_TRIG, linewidth=1.2, linestyle="--", label="Trigger", zorder=5)
+
+    # Trigger / re-trigger events
     _te_labeled = False
     for te in (trigger_events or []):
         te_rel = te - trigger_time
         if -graph_pre_s <= te_rel <= graph_post_s:
             _lbl = "Ausl\u00f6sung" if not _te_labeled else None
-            ax_pir.axvline(te_rel, color=CLR_TRIG_EV, linewidth=1.0,
-                           linestyle="-.", alpha=0.8, label=_lbl)
+            ax_pir.axvline(te_rel, color=CLR_EV, linewidth=1.0, linestyle="-.",
+                           alpha=0.9, label=_lbl, zorder=5)
             _te_labeled = True
 
-    # ---- Pulse width annotations ----
+    # Pulse width annotations
     for pw_time, pw_ms in (pulse_widths or []):
-        fall_rel  = pw_time - trigger_time
-        start_rel = fall_rel - pw_ms / 1000.0
-        center_rel = (start_rel + fall_rel) / 2.0
+        fall_rel   = pw_time - trigger_time
+        center_rel = fall_rel - pw_ms / 2000.0
         if -graph_pre_s <= center_rel <= graph_post_s:
+            color = CLR_WIN if pw_ms >= ir_on_pulse_ms else CLR_TXT
             ax_pir.annotate(
                 f"{pw_ms:.0f}ms",
-                xy=(center_rel, 1.08),
+                xy=(center_rel, 1.09),
                 ha="center", va="bottom",
-                fontsize=5.5, color=CLR_TRIG_EV,
-                annotation_clip=True,
+                fontsize=5.5, color=color,
+                annotation_clip=True, zorder=6,
             )
 
-    ax_pir.set_xlim(-graph_pre_s, graph_post_s)
-    ax_pir.set_ylim(-0.05, 1.22)
+    ax_pir.set_ylim(-0.05, 1.25)
     ax_pir.set_yticks([0, 1])
     ax_pir.set_yticklabels(["LOW", "HIGH"], color=CLR_TXT, fontsize=8)
-    ax_pir.set_ylabel("PIR", color=CLR_TXT, fontsize=8)
-    ax_pir.tick_params(colors=CLR_TXT, labelsize=7, which="both")
-    for spine in ax_pir.spines.values():
-        spine.set_edgecolor(CLR_GRID)
-    ax_pir.xaxis.set_major_locator(ticker.MultipleLocator(major_s))
-    ax_pir.xaxis.set_minor_locator(ticker.MultipleLocator(minor_s))
-    ax_pir.grid(True, which="major", color=CLR_GRID, linewidth=0.6)
-    ax_pir.grid(True, which="minor", color=CLR_GRID, linewidth=0.3, linestyle=":")
-    ax_pir.legend(fontsize=7, framealpha=0.2, labelcolor=CLR_TXT)
+    ax_pir.legend(fontsize=6.5, framealpha=0.25, labelcolor=CLR_TXT,
+                  loc="upper left", ncol=3)
 
-    # ---- IR-LED panel (only when relay data present) ----
+    # ── IR-LED panel ───────────────────────────────────────────────────
     if has_relay:
         ax_ir = axes[1]
-        ax_ir.set_facecolor(BG)
-        ax_ir.step(relay_t, relay_v, where="post", color=CLR_IRLED, linewidth=1.5)
-        ax_ir.fill_between(relay_t, relay_v, step="post", alpha=0.30, color=CLR_IRLED)
-        ax_ir.axvline(0, color=CLR_TRIG, linewidth=1.2, linestyle="--")
-        ax_ir.set_xlim(-graph_pre_s, graph_post_s)
+        _style_ax(ax_ir, "IR-LED", CLR_IRLED)
+
+        # T_WINDOW spans
+        for ws, we in window_spans:
+            ax_ir.axvspan(ws, we, alpha=0.15, color=CLR_WIN, zorder=1)
+
+        # Recording span
+        if recording_stop_time is not None and recording_stop_time > trigger_time:
+            stop_rel = min(recording_stop_time - trigger_time, graph_post_s)
+            ax_ir.axvspan(0, stop_rel, alpha=0.07, color=CLR_REC, zorder=1)
+            ax_ir.axvline(stop_rel, color=CLR_REC, linewidth=1.0, linestyle=":", zorder=3)
+
+        # IR-LED state
+        ax_ir.step(relay_t, relay_v, where="post", color=CLR_IRLED, linewidth=1.5, zorder=4)
+        ax_ir.fill_between(relay_t, relay_v, step="post", alpha=0.35, color=CLR_IRLED, zorder=3)
+
+        ax_ir.axvline(0, color=CLR_TRIG, linewidth=1.2, linestyle="--", zorder=5)
         ax_ir.set_ylim(-0.05, 1.15)
         ax_ir.set_yticks([0, 1])
         ax_ir.set_yticklabels(["AUS", "AN"], color=CLR_IRLED, fontsize=8)
-        ax_ir.set_ylabel("IR-LED", color=CLR_IRLED, fontsize=8)
         ax_ir.set_xlabel("Zeit relativ zu Auslösung (s)", color=CLR_TXT, fontsize=8)
-        ax_ir.tick_params(colors=CLR_TXT, labelsize=7, which="both")
-        for spine in ax_ir.spines.values():
-            spine.set_edgecolor(CLR_GRID)
-        ax_ir.xaxis.set_major_locator(ticker.MultipleLocator(major_s))
-        ax_ir.xaxis.set_minor_locator(ticker.MultipleLocator(minor_s))
-        ax_ir.grid(True, which="major", color=CLR_GRID, linewidth=0.6)
-        ax_ir.grid(True, which="minor", color=CLR_GRID, linewidth=0.3, linestyle=":")
     else:
         axes[0].set_xlabel("Zeit relativ zu Auslösung (s)", color=CLR_TXT, fontsize=8)
 
@@ -300,7 +333,7 @@ class CameraManager:
         self._watchdog_timer: Optional[threading.Timer] = None
         self._live_clients: int = 0
         self._stop_event = threading.Event()
-        self._last_pir_time: float = 0.0
+        self._recording_end_time: float = 0.0  # monotonic deadline for recording stop
 
         self.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
         self._apply_config(config)
@@ -344,6 +377,8 @@ class CameraManager:
         self._pir_graph_enabled: bool = bool(pir_cfg.get("save_graph", False))
         self._graph_pre_s: float  = max(5.0, min(300.0, float(pir_cfg.get("graph_pre_s",  30.0))))
         self._graph_post_s: float = max(5.0, min(300.0, float(pir_cfg.get("graph_post_s", 30.0))))
+        self._graph_pulse_window_s: float = float(pir_cfg.get("pulse_window_s", 0.0))
+        self._graph_ir_on_pulse_ms: float = float(cfg.get("relay", {}).get("ir_on_pulse_ms", 0.0))
 
         self._transform = Transform(
             hflip=bool(cam_cfg.get("hflip", False)),
@@ -597,24 +632,32 @@ class CameraManager:
                 logger.info("Last LIVE client disconnected → reverting to TRAP")
                 self._transition_to_trap()
 
-    def trigger_recording(self) -> None:
+    def trigger_recording(self, window_expiry: float = 0.0) -> None:
         """
-        Called by GPIOManager when PIR fires.
-        Saves the pre-event buffer and records post_event_seconds more.
-        Re-triggering while already RECORDING extends the recording timer.
+        Called by GPIOManager when a trigger condition (A or B) fires.
+
+        window_expiry: monotonic time when the current T_WINDOW expires
+          (now + T_WINDOW at the moment the triggering pulse fell).
+        End_Time = max(now + T_AFTER_RECORD, window_expiry)  [Spec §3.2 — Highest Wins]
+
+        If already RECORDING the request is a no-op here — extend_recording()
+        already handled the end-time update via the valid-pulse callback.
         """
         with self._lock:
             if self._state == CameraState.RECORDING:
-                # Extend the recording: reset the inactivity timer
-                self._last_pir_time = time.monotonic()
-                logger.debug("PIR re-trigger: extending recording timer")
+                # Safety: also update end_time in case valid-pulse cb was missed
+                now = time.monotonic()
+                new_end = max(now + self.POST_EVENT_SECONDS, window_expiry)
+                if new_end > self._recording_end_time:
+                    self._recording_end_time = new_end
                 return
             if self._state != CameraState.TRAP:
                 logger.debug("PIR trigger ignored (state=%s)", self._state)
                 return
             self._state = CameraState.RECORDING
-            self._last_pir_time = time.monotonic()
-            self._recording_trigger_time = self._last_pir_time  # for PIR graph
+            now = time.monotonic()
+            self._recording_end_time = max(now + self.POST_EVENT_SECONDS, window_expiry)
+            self._recording_trigger_time = now  # for PIR graph
 
         if self._recording_notify_start:
             try:
@@ -622,6 +665,27 @@ class CameraManager:
             except Exception:
                 logger.exception("recording_notify_start callback raised")
         threading.Thread(target=self._recording_worker, daemon=True).start()
+
+    def extend_recording(self, window_expiry: float) -> None:
+        """Called by GPIOManager for every valid pulse (>= T_VALID) while recording.
+
+        Implements Spec §3.2 Extension Logic:
+          End_Time = max(End_Time, now + T_AFTER_RECORD, window_expiry)  [Highest Wins]
+        """
+        with self._lock:
+            if self._state != CameraState.RECORDING:
+                return
+            now = time.monotonic()
+            new_end = max(self._recording_end_time,
+                          now + self.POST_EVENT_SECONDS,
+                          window_expiry)
+            if new_end > self._recording_end_time:
+                self._recording_end_time = new_end
+                logger.debug(
+                    "Recording end extended to +%.1fs (T_AFTER=%.0fs, window_expiry in %.1fs)",
+                    self._recording_end_time - now, self.POST_EVENT_SECONDS,
+                    window_expiry - now,
+                )
 
     def is_recording(self) -> bool:
         """Return True while a PIR-triggered recording is in progress."""
@@ -793,21 +857,18 @@ class CameraManager:
                 self._circ_output.fileoutput = str(h264_path)
                 self._circ_output.start()
 
-            # Wait until POST_EVENT_SECONDS have passed with no PIR activity.
-            # Each PIR re-trigger resets _last_pir_time, extending the window.
-            # The elapsed check and the stop decision are made atomically inside
-            # the lock so that a concurrent trigger_recording() call cannot slip
-            # in between the check and the circ_output.stop() transition.
+            # Wait until _recording_end_time passes (Spec §3.2 Highest Wins).
+            # The deadline is updated atomically under _lock by extend_recording()
+            # and trigger_recording(), so no race condition is possible.
             recording_stop_time: float = 0.0
-            _poll = 0.5
+            _poll = 0.25
             while True:
                 time.sleep(_poll)
                 stop_now = False
                 with self._lock:
                     if self._state != CameraState.RECORDING:
                         return  # Cancelled externally (e.g. LIVE request)
-                    elapsed = time.monotonic() - self._last_pir_time
-                    if elapsed >= self.POST_EVENT_SECONDS:
+                    if time.monotonic() >= self._recording_end_time:
                         stop_now = True
                         recording_stop_time = time.monotonic()
                         if self._cam:
@@ -815,8 +876,9 @@ class CameraManager:
                         self._state = CameraState.TRAP
                 if stop_now:
                     break
-                logger.debug("Recording active — %.1fs since last PIR (limit %ds)",
-                             elapsed, self.POST_EVENT_SECONDS)
+                with self._lock:
+                    remaining = self._recording_end_time - time.monotonic()
+                logger.debug("Recording active — %.1fs remaining", remaining)
             # Notify gpio_manager that recording has ended — it will handle IR LED auto-off
             if self._recording_notify_stop:
                 try:
@@ -863,6 +925,8 @@ class CameraManager:
                             trigger_events=trigger_events,
                             pulse_widths=pulse_widths,
                             recording_stop_time=recording_stop_time,
+                            pulse_window_s=self._graph_pulse_window_s,
+                            ir_on_pulse_ms=self._graph_ir_on_pulse_ms,
                         )
                 except Exception:
                     logger.exception("PIR graph generation failed (non-fatal)")

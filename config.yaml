@@ -5,7 +5,7 @@ camera:
   af_mode: 0
   af_range: 0
   af_speed: 0
-  analogue_gain: 0.0
+  analogue_gain: 11.5
   awb_mode: 0
   brightness: 0.2
   colour_gain_blue: 1.0
@@ -21,7 +21,7 @@ camera:
   night_vision: true
   noise_reduction_mode: 1
   saturation: 1.2
-  sharpness: 1.0
+  sharpness: 15.1
   vflip: false
 live:
   framerate: 15
@@ -33,13 +33,13 @@ live:
 pir:
   gpio_pin: 17
   graph_post_s: 10
-  graph_pre_s: 5
-  min_pulse_ms: 1440.0
+  graph_pre_s: 10
+  min_pulse_ms: 210.0
   poll_interval_ms: 10
   pull_down: true
   pulse_count: 3
   pulse_window_min_ms: 20.0
-  pulse_window_s: 8.0
+  pulse_window_s: 3.0
   save_graph: true
 power_saving:
   bluetooth_off: true
@@ -48,7 +48,7 @@ power_saving:
 relay:
   active_high: true
   gpio_pin: 18
-  ir_on_pulse_ms: 200
+  ir_on_pulse_ms: 100
 server:
   host: 0.0.0.0
   port: 8080
@@ -74,9 +74,9 @@ storage:
     username: root
   recordings_path: /recordings
 trap:
-  enabled: true
+  enabled: false
   framerate: 30
-  post_event_seconds: 2
+  post_event_seconds: 4
   pre_event_seconds: 2
   resolution:
   - 1920

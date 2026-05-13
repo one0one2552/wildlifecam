@@ -97,6 +97,9 @@ class GPIOManager:
         self._ir_conditions_cleared_ts: float = 0.0
         # Direct bool set by camera_manager — avoids lock contention from is_recording() callback.
         self._recording_active: bool = False
+        # Callback: called with (window_expiry: float) for every valid pulse >= T_VALID.
+        # gpio_manager calls this so camera_manager can extend the recording end time.
+        self._on_valid_pulse: Optional[Callable[[float], None]] = None
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -180,8 +183,20 @@ class GPIOManager:
         self._recording_active = True
 
     def recording_stopped(self) -> None:
-        """Called by camera_manager when a PIR-triggered recording ends."""
+        """Called by camera_manager when a PIR-triggered recording ends.
+
+        Per spec §3.3 override: LED must shut off immediately when recording
+        terminates, provided the T_WINDOW has also expired.
+        """
         self._recording_active = False
+        # Immediate re-evaluation — don't wait for the next poll tick.
+        now = time.monotonic()
+        with self._lock:
+            pw_s = self._pulse_window_s
+        window_active = (self._ir_last_on_ts > 0) and (now - self._ir_last_on_ts < pw_s)
+        if not window_active and self._relay_state:
+            self._write_relay(False)
+            logger.info("IR LED OFF — recording ended, T_WINDOW expired")
 
     def set_trap_enabled(self, enabled: bool) -> None:
         """Enable or disable the trap (PIR → recording trigger)."""
@@ -256,79 +271,83 @@ class GPIOManager:
                     pulse_start = now
 
                 elif val == 0 and last_val == 1 and in_pulse:
-                    # Falling edge — evaluate the completed pulse
+                    # ── Falling edge — evaluate the completed pulse ──
                     in_pulse = False
                     pulse_duration_ms = (now - pulse_start) * 1000.0
 
-                    with self._lock:
-                        min_ms = self._min_pulse_ms
-                        window_min_ms = self._pulse_window_min_ms
-                        debounce_ms = _PIR_DEBOUNCE_MS
-                        pulse_count_needed = self._pulse_count
-                        pulse_window = self._pulse_window_s
-                        ir_on_ms = self._ir_on_pulse_ms
-                        trap_on = self._trap_enabled
-
-                    # Log pulse width for graph annotation
+                    # Always log pulse width for graph
                     with self._pulse_width_log_lock:
                         self._pulse_width_log.append((now, pulse_duration_ms))
                         _pw_cutoff = now - _PIR_LOG_WINDOW_S
                         while self._pulse_width_log and self._pulse_width_log[0][0] < _pw_cutoff:
                             self._pulse_width_log.popleft()
 
-                    # IR LED: mark qualifying pulses; per-cycle logic manages actual relay.
-                    if pulse_duration_ms >= ir_on_ms:
-                        self._ir_last_on_ts = now
-                        logger.debug("IR LED qualifying pulse %.0f ms", pulse_duration_ms)
+                    with self._lock:
+                        min_ms       = self._min_pulse_ms         # T_INSTANT
+                        window_min_ms = self._pulse_window_min_ms  # T_VALID
+                        debounce_ms  = _PIR_DEBOUNCE_MS
+                        pulse_count_needed = self._pulse_count     # N_THRESHOLD
+                        pulse_window = self._pulse_window_s        # T_WINDOW
+                        ir_on_ms     = self._ir_on_pulse_ms
+                        trap_on      = self._trap_enabled
 
-                    elapsed_since_last = (now - self._last_trigger_ts) * 1000
+                    window_expiry = now + pulse_window
 
-                    if pulse_duration_ms >= min_ms:
-                        # ── OR leg 1: single long pulse → trigger immediately ──
-                        if elapsed_since_last < debounce_ms:
-                            logger.debug("PIR debounced long pulse (%.0f ms)", elapsed_since_last)
-                        else:
-                            self._last_trigger_ts = now
-                            self._pulse_times.clear()
-                            logger.info(
-                                "PIR trigger: long pulse (%.0f ms >= %.0f ms) on GPIO%d",
-                                pulse_duration_ms, min_ms, self._pir_pin,
-                            )
-                            if trap_on and self._on_motion:
-                                with self._trigger_event_log_lock:
-                                    self._trigger_event_log.append(now)
-                                    _te_cutoff = now - _PIR_LOG_WINDOW_S
-                                    while self._trigger_event_log and self._trigger_event_log[0] < _te_cutoff:
-                                        self._trigger_event_log.popleft()
-                                try:
-                                    self._on_motion()
-                                except Exception:
-                                    logger.exception("on_motion callback raised")
-                            elif not trap_on:
-                                logger.debug("PIR trigger suppressed — trap disabled")
+                    # ── Valid pulse (>= T_VALID): arm IR LED, count for window ──
+                    if pulse_duration_ms >= window_min_ms:
+                        # Arm IR LED if pulse also meets ir_on_pulse_ms threshold
+                        if pulse_duration_ms >= ir_on_ms:
+                            self._ir_last_on_ts = now
+                            logger.debug("IR LED armed — pulse %.0f ms", pulse_duration_ms)
 
-                    elif pulse_duration_ms >= window_min_ms:
-                        # ── OR leg 2: short pulse → count toward window ──
-                        if elapsed_since_last < debounce_ms:
-                            logger.debug("PIR debounced short pulse (%.0f ms)", elapsed_since_last)
-                        else:
-                            self._last_trigger_ts = now
-                            cutoff = now - pulse_window
-                            self._pulse_times = [
-                                t for t in self._pulse_times if t > cutoff
-                            ]
-                            self._pulse_times.append(now)
-                            count = len(self._pulse_times)
+                        # Add to sliding window and prune old entries
+                        cutoff = now - pulse_window
+                        self._pulse_times = [t for t in self._pulse_times if t > cutoff]
+                        self._pulse_times.append(now)
 
-                            logger.debug(
-                                "PIR short pulse (%.0f ms), %d/%d in %.1fs window",
-                                pulse_duration_ms, count, pulse_count_needed, pulse_window,
-                            )
+                        # Notify camera_manager to extend recording end time (Spec §3.2)
+                        if self._on_valid_pulse:
+                            try:
+                                self._on_valid_pulse(window_expiry)
+                            except Exception:
+                                logger.exception("on_valid_pulse callback raised")
 
-                            if count >= pulse_count_needed:
+                        elapsed_since_last = (now - self._last_trigger_ts) * 1000
+
+                        # ── Condition A: instant-trigger (T_INSTANT) ──
+                        if pulse_duration_ms >= min_ms:
+                            if elapsed_since_last < debounce_ms:
+                                logger.debug("PIR debounced instant pulse (%.0f ms)", elapsed_since_last)
+                            else:
+                                self._last_trigger_ts = now
                                 self._pulse_times.clear()
                                 logger.info(
-                                    "PIR trigger: %d short pulse(s) within %.1fs on GPIO%d",
+                                    "PIR trigger A: instant pulse (%.0f ms >= %.0f ms) on GPIO%d",
+                                    pulse_duration_ms, min_ms, self._pir_pin,
+                                )
+                                if trap_on and self._on_motion:
+                                    with self._trigger_event_log_lock:
+                                        self._trigger_event_log.append(now)
+                                        _te_cutoff = now - _PIR_LOG_WINDOW_S
+                                        while self._trigger_event_log and self._trigger_event_log[0] < _te_cutoff:
+                                            self._trigger_event_log.popleft()
+                                    try:
+                                        self._on_motion(window_expiry)
+                                    except Exception:
+                                        logger.exception("on_motion callback raised")
+                                elif not trap_on:
+                                    logger.debug("PIR trigger suppressed — trap disabled")
+
+                        # ── Condition B: N_THRESHOLD valid pulses in T_WINDOW ──
+                        elif len(self._pulse_times) >= pulse_count_needed:
+                            if elapsed_since_last < debounce_ms:
+                                logger.debug("PIR debounced window trigger (%.0f ms)", elapsed_since_last)
+                            else:
+                                self._last_trigger_ts = now
+                                count = len(self._pulse_times)
+                                self._pulse_times.clear()
+                                logger.info(
+                                    "PIR trigger B: %d valid pulse(s) within %.1fs on GPIO%d",
                                     count, pulse_window, self._pir_pin,
                                 )
                                 if trap_on and self._on_motion:
@@ -338,11 +357,18 @@ class GPIOManager:
                                         while self._trigger_event_log and self._trigger_event_log[0] < _te_cutoff:
                                             self._trigger_event_log.popleft()
                                     try:
-                                        self._on_motion()
+                                        self._on_motion(window_expiry)
                                     except Exception:
                                         logger.exception("on_motion callback raised")
                                 elif not trap_on:
                                     logger.debug("PIR trigger suppressed — trap disabled")
+
+                        else:
+                            logger.debug(
+                                "PIR valid pulse (%.0f ms), %d/%d in %.1fs window",
+                                pulse_duration_ms, len(self._pulse_times),
+                                pulse_count_needed, pulse_window,
+                            )
 
                     else:
                         logger.debug(
@@ -352,26 +378,19 @@ class GPIOManager:
 
                 last_val = val
 
-                # Per-cycle IR LED management:
-                # ON while pulse_window active OR recording is running.
-                # OFF after 1s grace period once both conditions clear.
+                # ── Per-cycle IR LED management (Spec §3.3) ──
+                # ON while T_WINDOW active (last ir-qualifying pulse < T_WINDOW ago) OR recording.
+                # OFF immediately when both conditions clear (spec: no grace period).
                 with self._lock:
                     _pw_s = self._pulse_window_s
                 _window_active = (self._ir_last_on_ts > 0) and (now - self._ir_last_on_ts < _pw_s)
-                _rec_active = self._recording_active  # set directly by camera_manager, no lock needed
-                _want_on = _window_active or _rec_active
-                if _want_on:
-                    self._ir_conditions_cleared_ts = 0.0
-                    if not self._relay_state:
-                        self._write_relay(True)
-                        logger.info("IR LED ON (window=%s, rec=%s)", _window_active, _rec_active)
-                elif self._relay_state:
-                    if self._ir_conditions_cleared_ts == 0.0:
-                        self._ir_conditions_cleared_ts = now
-                    elif now - self._ir_conditions_cleared_ts >= 1.0:
-                        self._write_relay(False)
-                        self._ir_conditions_cleared_ts = 0.0
-                        logger.info("IR LED OFF — 1s grace expired")
+                _want_on = _window_active or self._recording_active
+                if _want_on and not self._relay_state:
+                    self._write_relay(True)
+                    logger.info("IR LED ON (window=%s rec=%s)", _window_active, self._recording_active)
+                elif not _want_on and self._relay_state:
+                    self._write_relay(False)
+                    logger.info("IR LED OFF (window=%s rec=%s)", _window_active, self._recording_active)
 
             except Exception:
                 logger.exception("PIR poll error")
